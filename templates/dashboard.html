@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeshCore Repeater Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <header>
+    <h1>MeshCore Repeater Monitor</h1>
+    <div class="subtitle">LoRa Mesh Network Dashboard</div>
+    <div class="status-bar">
+      <span class="status-dot unknown" id="connDot"></span>
+      <span id="connText">Connecting...</span>
+      &mdash; Last update: <span id="lastUpdate">--</span>
+      <button class="logs-btn" onclick="openLogs()" title="Activity Logs">Logs</button>
+      <button class="settings-btn" onclick="openSettings()" title="Settings">&#9881;</button>
+    </div>
+  </header>
+
+  <div class="grid" id="repeaterGrid">
+    <div class="no-data">
+      <h2>Connecting...</h2>
+      <p>Waiting for the server to respond.</p>
+    </div>
+  </div>
+
+  <!-- History Modal -->
+  <div class="modal-overlay" id="historyModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="historyTitle">History</h2>
+        <button class="modal-close" onclick="closeHistory()">&times;</button>
+      </div>
+      <canvas id="historyChart" height="250"></canvas>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-content settings-panel">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button class="modal-close" onclick="closeSettings()">&times;</button>
+      </div>
+
+      <!-- Companion Device -->
+      <div class="settings-section">
+        <h3>Companion Device</h3>
+        <div class="settings-row">
+          <div class="settings-field">
+            <label for="companionHost">IP Address</label>
+            <input type="text" id="companionHost" placeholder="192.168.1.100">
+          </div>
+          <div class="settings-field settings-field-small">
+            <label for="companionPort">Port</label>
+            <input type="number" id="companionPort" placeholder="5000" value="5000">
+          </div>
+        </div>
+      </div>
+
+      <!-- Polling Timing -->
+      <div class="settings-section">
+        <h3>Polling Timing</h3>
+        <div class="settings-row">
+          <div class="settings-field">
+            <label for="pollInterval">Poll Cycle (seconds)</label>
+            <input type="number" id="pollInterval" placeholder="120" min="30">
+          </div>
+          <div class="settings-field">
+            <label for="staggerDelay">Stagger Delay (seconds)</label>
+            <input type="number" id="staggerDelay" placeholder="15" min="5">
+          </div>
+          <div class="settings-field settings-field-small">
+            <label for="lowBatteryPct">Low Batt %</label>
+            <input type="number" id="lowBatteryPct" placeholder="20" min="5" max="50" value="20">
+          </div>
+        </div>
+      </div>
+
+      <!-- Repeaters -->
+      <div class="settings-section">
+        <h3>Repeaters</h3>
+        <div id="repeaterList"></div>
+        <button class="btn btn-add" onclick="addRepeaterRow()">+ Add Repeater</button>
+      </div>
+
+      <!-- Save -->
+      <div class="settings-actions">
+        <span id="settingsStatus" class="settings-status"></span>
+        <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveSettings()">Save &amp; Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logs Modal -->
+  <div class="modal-overlay" id="logsModal">
+    <div class="modal-content logs-panel">
+      <div class="modal-header">
+        <h2>Activity Logs</h2>
+        <button class="modal-close" onclick="closeLogs()">&times;</button>
+      </div>
+      <div class="logs-controls">
+        <div class="logs-filter-group">
+          <label for="logHours">Show last</label>
+          <select id="logHours" onchange="refreshLogs()">
+            <option value="1">1 hour</option>
+            <option value="6">6 hours</option>
+            <option value="12">12 hours</option>
+            <option value="24" selected>24 hours</option>
+            <option value="48">48 hours</option>
+            <option value="168">7 days</option>
+          </select>
+        </div>
+        <div class="logs-filter-group">
+          <label for="logLevel">Level</label>
+          <select id="logLevel" onchange="refreshLogs()">
+            <option value="">All</option>
+            <option value="ERROR">Error</option>
+            <option value="WARNING">Warning</option>
+            <option value="INFO">Info</option>
+          </select>
+        </div>
+        <button class="btn btn-secondary logs-refresh-btn" onclick="refreshLogs()">Refresh</button>
+      </div>
+      <div class="logs-retention-setting">
+        <label for="logRetention">Auto-delete logs older than</label>
+        <input type="number" id="logRetention" min="1" max="720" value="24">
+        <span>hours</span>
+        <button class="btn btn-secondary" onclick="saveLogRetention()">Save</button>
+      </div>
+      <div class="logs-table-wrap" id="logsTableWrap">
+        <table class="logs-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Level</th>
+              <th>Source</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody id="logsBody">
+            <tr><td colspan="4" class="logs-empty">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/dashboard.js"></script>
+</body>
+</html>
