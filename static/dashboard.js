@@ -385,6 +385,51 @@ function escapeAttr(str) {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function importSettingsFile(event) {
+  var file = event.target.files[0];
+  // Reset input so the same file can be re-selected if needed
+  event.target.value = '';
+  if (!file) return;
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var s;
+    try {
+      s = JSON.parse(e.target.result);
+    } catch (err) {
+      showSettingsStatus('Invalid JSON file: ' + err.message, true);
+      return;
+    }
+
+    if (!s.companion_host) {
+      showSettingsStatus('File is missing required field: companion_host', true);
+      return;
+    }
+
+    // Populate form fields
+    document.getElementById('companionHost').value = s.companion_host || '';
+    document.getElementById('companionPort').value = s.companion_port || 5000;
+    document.getElementById('pollInterval').value = s.poll_interval_seconds || 120;
+    document.getElementById('staggerDelay').value = s.stagger_delay_seconds || 15;
+    document.getElementById('lowBatteryPct').value = s.low_battery_percent || 20;
+
+    // Render repeater rows
+    var list = document.getElementById('repeaterList');
+    list.innerHTML = '';
+    var repeaters = s.repeaters || [];
+    if (repeaters.length === 0) {
+      addRepeaterRow();
+    } else {
+      repeaters.forEach(function(r) {
+        addRepeaterRow(r.name, r.pubkey, r.admin_pass, r.path);
+      });
+    }
+
+    showSettingsStatus('Settings loaded from file. Review and click Save & Apply.', false);
+  };
+  reader.readAsText(file);
+}
+
 function saveSettings() {
   clearSettingsStatus();
 

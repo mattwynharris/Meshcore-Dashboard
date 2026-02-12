@@ -222,29 +222,28 @@ class DataStore:
         handler.setFormatter(logging.Formatter("%(message)s"))
         return handler
 
-    def get_activity_logs(self, hours: int = 24, level: str = None, limit: int = 500) -> list:
-        """Return recent activity log entries."""
+    def get_activity_logs(self, hours: int = 24, level: str = None, search: str = None, limit: int = 500) -> list:
+        """Return recent activity log entries, optionally filtered by level and message text."""
         if not self._db_path:
             return []
         since = time.time() - (hours * 3600)
         try:
             conn = sqlite3.connect(self._db_path)
+            where = "WHERE timestamp > ?"
+            params: list = [since]
             if level:
-                rows = conn.execute(
-                    "SELECT id, timestamp, level, logger_name, message "
-                    "FROM activity_log "
-                    "WHERE timestamp > ? AND level = ? "
-                    "ORDER BY timestamp DESC LIMIT ?",
-                    (since, level.upper(), limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT id, timestamp, level, logger_name, message "
-                    "FROM activity_log "
-                    "WHERE timestamp > ? "
-                    "ORDER BY timestamp DESC LIMIT ?",
-                    (since, limit),
-                ).fetchall()
+                where += " AND level = ?"
+                params.append(level.upper())
+            if search:
+                where += " AND message LIKE ?"
+                params.append(f"%{search}%")
+            params.append(limit)
+            rows = conn.execute(
+                f"SELECT id, timestamp, level, logger_name, message "
+                f"FROM activity_log {where} "
+                f"ORDER BY timestamp DESC LIMIT ?",
+                params,
+            ).fetchall()
             conn.close()
             return [
                 {

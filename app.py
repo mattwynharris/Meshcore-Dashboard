@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 import config as cfg
 from data_store import DataStore
@@ -19,6 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger("app")
 
 BASE_DIR = Path(__file__).parent
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 store = DataStore()
 poller = MeshcorePoller(store)
 
@@ -68,6 +70,11 @@ async def index():
     return html_path.read_text()
 
 
+@app.get("/logs", response_class=HTMLResponse)
+async def logs_page(request: Request):
+    return templates.TemplateResponse("logs.html", {"request": request})
+
+
 # --- Repeater Data API ---
 
 @app.get("/api/repeaters")
@@ -81,9 +88,9 @@ async def get_history(pubkey: str, hours: int = 24):
 
 
 @app.get("/api/logs")
-async def get_logs(hours: int = 24, level: str = None, limit: int = 500):
-    """Return recent activity logs, optionally filtered by level."""
-    return store.get_activity_logs(hours=hours, level=level, limit=limit)
+async def get_logs(hours: int = 24, level: str = None, search: str = None, limit: int = 500):
+    """Return recent activity logs, optionally filtered by level and/or message text."""
+    return store.get_activity_logs(hours=hours, level=level, search=search, limit=limit)
 
 
 @app.get("/api/stream")

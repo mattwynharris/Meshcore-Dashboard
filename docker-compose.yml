@@ -1,0 +1,11 @@
+services:
+  dashboard:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist settings and database outside the container.
+      # On first run, copy your settings.json into ./data/ or configure via the UI.
+      - ./data/settings.json:/app/settings.json
+      - ./data/repeater_history.db:/app/repeater_history.db
+    restart: unless-stopped

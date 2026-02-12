@@ -16,7 +16,7 @@
       <span class="status-dot unknown" id="connDot"></span>
       <span id="connText">Connecting...</span>
       &mdash; Last update: <span id="lastUpdate">--</span>
-      <button class="logs-btn" onclick="openLogs()" title="Activity Logs">Logs</button>
+      <a href="/logs" class="logs-btn" title="Activity Logs">Logs</a>
       <button class="settings-btn" onclick="openSettings()" title="Settings">&#9881;</button>
     </div>
   </header>
@@ -91,6 +91,8 @@
       <!-- Save -->
       <div class="settings-actions">
         <span id="settingsStatus" class="settings-status"></span>
+        <input type="file" id="settingsFileInput" accept=".json" style="display:none" onchange="importSettingsFile(event)">
+        <button class="btn btn-secondary" onclick="document.getElementById('settingsFileInput').click()">Import from file</button>
         <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
         <button class="btn btn-primary" onclick="saveSettings()">Save &amp; Apply</button>
       </div>

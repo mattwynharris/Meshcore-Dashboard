@@ -484,6 +484,7 @@ header .status-bar {
 /* --- Logs Button --- */
 
 .logs-btn {
+  display: inline-block;
   background: none;
   border: 1px solid #334155;
   color: #94a3b8;
@@ -494,6 +495,7 @@ header .status-bar {
   margin-left: 0.5rem;
   vertical-align: middle;
   font-family: inherit;
+  text-decoration: none;
   transition: color 0.2s, border-color 0.2s;
 }
 
