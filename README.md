@@ -8,6 +8,13 @@ working along side a WIFI connected Node on port 5000
 
 ---
 
+## Requirements 
+
+Guest OS  Ubuntu Linux (64-bit)
+Compatibility  ESXi 7.0 U2 virtual machine
+CPUs  1
+Memory 1 GB
+
 ## Installation
 
 ### 1. Install Docker on the VM
