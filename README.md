@@ -15,24 +15,18 @@ sudo usermod -aG docker $USER
 ```
 > Log out and back in before continuing.
 
-### 2. Copy the files to the VM
+### 2. Clone the repo and run setup
 
 ```bash
-# Run this on your Mac
-scp -r meshcore-dashboard/ user@your-vm-ip:~/
-```
-
-### 3. Run the setup script
-
-```bash
-# Run this on the VM
-cd ~/meshcore-dashboard
+# Run these on the VM
+git clone https://github.com/YOUR_USERNAME/meshcore-dashboard.git
+cd meshcore-dashboard
 bash install.sh
 ```
 
 The script builds the Docker image and starts the dashboard. It will print the URL when done.
 
-### 4. Open the dashboard and configure it
+### 3. Open the dashboard and configure it
 
 Go to `http://<vm-ip>:8080` in your browser, then click the **⚙ gear icon** and enter:
 
@@ -48,16 +42,11 @@ The dashboard will start polling your repeaters straight away.
 
 No SSH needed — updates go through the dashboard.
 
-**On your Mac**, build the update zip:
-```bash
-cd ~/meshcore-dashboard
-zip -r meshcore-dashboard-update.zip \
-  app.py config.py data_store.py meshcore_poller.py templates/ static/
-```
+**Download the latest update zip** from the [Releases page](https://github.com/YOUR_USERNAME/meshcore-dashboard/releases) — look for `meshcore-dashboard-update.zip` attached to the latest release.
 
 **In the browser:**
 1. Open **Settings** → scroll to **Software Update**
-2. Click **Choose .zip…** → select the zip → click **Upload & Apply**
+2. Click **Choose .zip…** → select the downloaded zip → click **Upload & Apply**
 3. Click **Restart Now** — the page reloads automatically
 
 ---
