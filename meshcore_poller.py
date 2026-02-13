@@ -315,3 +315,39 @@ class MeshcorePoller:
 
         except Exception as e:
             logger.error(f"[{name}] Telemetry request error: {e}")
+
+    async def ping_repeater(self, pubkey: str) -> dict:
+        """Request fresh status and telemetry from a repeater, updating the store."""
+        if not self.mc:
+            return {"ok": False, "error": "Not connected to companion device"}
+
+        contact = self._find_contact(pubkey)
+        if contact is None:
+            await self._refresh_contacts()
+            contact = self._find_contact(pubkey)
+        if contact is None:
+            return {"ok": False, "error": "Repeater not found in contacts — may be out of range"}
+
+        # Find name and admin password from config
+        name = pubkey[:8]
+        admin_pass = "password"
+        for r in cfg.get_repeaters():
+            pk = r["pubkey"]
+            if pk == pubkey or pk.startswith(pubkey) or pubkey.startswith(pk):
+                admin_pass = r.get("admin_pass", "password")
+                name = r.get("name", name)
+                break
+
+        start = time.monotonic()
+        try:
+            await self._login_to_repeater(contact, name, admin_pass)
+            await asyncio.sleep(1)
+            await self._request_status(pubkey, name, contact)
+            await asyncio.sleep(1)
+            await self._request_telemetry(pubkey, name, contact)
+            latency_ms = int((time.monotonic() - start) * 1000)
+            logger.info(f"[{name}] Manual refresh completed in {latency_ms}ms")
+            return {"ok": True, "latency_ms": latency_ms}
+        except Exception as e:
+            logger.error(f"[{name}] Manual refresh error: {e}")
+            return {"ok": False, "error": str(e)}

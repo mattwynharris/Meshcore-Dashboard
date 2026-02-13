@@ -88,6 +88,19 @@
         <button class="btn btn-add" onclick="addRepeaterRow()">+ Add Repeater</button>
       </div>
 
+      <!-- Software Update -->
+      <div class="settings-section">
+        <h3>Software Update</h3>
+        <p class="settings-help">Upload a .zip of updated source files to apply changes without SSH access.</p>
+        <div class="update-row">
+          <input type="file" id="updateZipInput" accept=".zip" style="display:none" onchange="handleUpdateZip(this)">
+          <button class="btn btn-secondary" onclick="document.getElementById('updateZipInput').click()">Choose .zip&hellip;</button>
+          <span id="updateZipName" class="update-zip-name">No file chosen</span>
+          <button class="btn btn-secondary" id="uploadUpdateBtn" onclick="doSettingsUpdate()" disabled>Upload &amp; Apply</button>
+        </div>
+        <div id="updateResult" class="update-result"></div>
+      </div>
+
       <!-- Save -->
       <div class="settings-actions">
         <span id="settingsStatus" class="settings-status"></span>

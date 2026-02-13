@@ -205,16 +205,81 @@ header .status-bar {
   margin-bottom: 0.75rem;
 }
 
-/* --- Last Seen Footer --- */
+/* --- Card Footer (last seen + ping) --- */
 
 .card-footer {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid #334155;
   font-size: 0.75rem;
   color: #94a3b8;
 }
+
+.card-footer-seen {
+  flex: 1;
+}
+
+/* --- Settings Repeater Row Move Buttons --- */
+
+.rpt-move-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.card-move-btn {
+  background: none;
+  border: 1px solid #334155;
+  color: #64748b;
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  line-height: 1.4;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.card-move-btn:hover:not(:disabled) {
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.card-move-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.card-ping-btn {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0.1rem 0.55rem;
+  border-radius: 4px;
+  font-family: inherit;
+  line-height: 1.4;
+  min-width: 2.5rem;
+  text-align: center;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.card-ping-btn:hover:not(:disabled) {
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.card-ping-btn:disabled { cursor: default; }
+
+.card-ping-btn.ping-ok   { border-color: #22c55e; color: #22c55e; }
+.card-ping-btn.ping-fail { border-color: #ef4444; color: #ef4444; }
 
 /* --- History Modal --- */
 
@@ -399,6 +464,44 @@ header .status-bar {
   background: #ef444420;
   border-color: #ef4444;
 }
+
+/* --- Settings: Software Update --- */
+
+.settings-help {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-bottom: 0.6rem;
+}
+
+.update-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.update-zip-name {
+  flex: 1;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-result {
+  margin-top: 0.6rem;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.update-result.err { color: #ef4444; }
+.update-ok { color: #22c55e; }
 
 /* --- Buttons --- */
 

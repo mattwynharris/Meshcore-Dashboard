@@ -1,10 +1,14 @@
 import asyncio
 import json
 import logging
+import os
+import signal
+import tempfile
+import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -165,4 +169,109 @@ async def save_settings(request: Request):
     # Tell the poller to reconnect with new settings
     poller.request_reconnect()
 
+    return {"ok": True}
+
+
+# --- Reorder & Ping APIs ---
+
+@app.post("/api/reorder")
+async def reorder_repeaters(request: Request):
+    """Reorder repeaters in settings and in the live data store."""
+    body = await request.json()
+    pubkeys = body.get("pubkeys", [])
+    if not pubkeys:
+        return {"ok": False, "error": "No pubkeys provided"}
+
+    settings = cfg.get_settings()
+    existing = {r["pubkey"]: r for r in settings.get("repeaters", [])}
+    settings["repeaters"] = [existing[pk] for pk in pubkeys if pk in existing]
+    # Preserve any not in the list (shouldn't happen, but be safe)
+    for pk, r in existing.items():
+        if pk not in pubkeys:
+            settings["repeaters"].append(r)
+    cfg.save_settings(settings)
+    store.reorder(pubkeys)
+    return {"ok": True}
+
+
+@app.post("/api/ping/{pubkey}")
+async def ping_repeater(pubkey: str):
+    """Ping a repeater and return round-trip latency."""
+    return await poller.ping_repeater(pubkey)
+
+
+# --- Update API ---
+
+# Allowed file paths inside the zip (only update dashboard source files)
+_ALLOWED_UPDATE_PATHS = {
+    "app.py", "config.py", "data_store.py", "meshcore_poller.py",
+}
+_ALLOWED_UPDATE_PREFIXES = ("templates/", "static/")
+# These are top-level source directories — never strip them during normalisation
+_KNOWN_TOP_DIRS = {"templates", "static"}
+
+
+def _is_allowed_path(name: str) -> bool:
+    if name in _ALLOWED_UPDATE_PATHS:
+        return True
+    return any(name.startswith(p) for p in _ALLOWED_UPDATE_PREFIXES)
+
+
+@app.post("/api/update")
+async def apply_update(file: UploadFile = File(...)):
+    """Accept a zip file, validate its contents, and extract to /app/."""
+    if not file.filename.endswith(".zip"):
+        return {"ok": False, "error": "File must be a .zip archive"}
+
+    data = await file.read()
+    if len(data) > 20 * 1024 * 1024:
+        return {"ok": False, "error": "Upload too large (max 20 MB)"}
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+        tmp.write(data)
+        tmp_path = tmp.name
+
+    try:
+        with zipfile.ZipFile(tmp_path) as zf:
+            names = zf.namelist()
+            # Strip leading top-level directory if zip was created with one
+            # e.g. "meshcore-dashboard/app.py" -> "app.py"
+            # But do NOT strip known source dirs like "templates/" or "static/"
+            def _normalise(name: str) -> str:
+                parts = name.split("/", 1)
+                if (len(parts) == 2 and "." not in parts[0]
+                        and parts[0] not in _KNOWN_TOP_DIRS and parts[1]):
+                    return parts[1]
+                return name
+
+            normalised = [_normalise(n) for n in names]
+            bad = [n for n in normalised if n and not n.endswith("/") and not _is_allowed_path(n)]
+            if bad:
+                return {"ok": False, "error": f"Zip contains unexpected paths: {bad[:5]}"}
+
+            for zip_name, norm_name in zip(names, normalised):
+                if not norm_name or norm_name.endswith("/"):
+                    continue
+                dest = BASE_DIR / norm_name
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(zf.read(zip_name))
+
+        logger.info(f"Update applied: {len([n for n in normalised if n and not n.endswith('/')])} files")
+        return {"ok": True, "files": [n for n in normalised if n and not n.endswith("/")]}
+    except zipfile.BadZipFile:
+        return {"ok": False, "error": "Invalid zip file"}
+    finally:
+        os.unlink(tmp_path)
+
+
+@app.post("/api/restart")
+async def restart_app():
+    """Send SIGTERM to self — Docker will restart the container."""
+    logger.info("Restart requested via /api/restart")
+
+    async def _delayed_kill():
+        await asyncio.sleep(0.5)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    asyncio.create_task(_delayed_kill())
     return {"ok": True}

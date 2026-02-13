@@ -5,7 +5,13 @@ services:
       - "8080:8080"
     volumes:
       # Persist settings and database outside the container.
-      # On first run, copy your settings.json into ./data/ or configure via the UI.
       - ./data/settings.json:/app/settings.json
       - ./data/repeater_history.db:/app/repeater_history.db
+      # Bind-mount source code so web-based updates persist across restarts.
+      - ./app.py:/app/app.py
+      - ./config.py:/app/config.py
+      - ./data_store.py:/app/data_store.py
+      - ./meshcore_poller.py:/app/meshcore_poller.py
+      - ./templates:/app/templates
+      - ./static:/app/static
     restart: unless-stopped

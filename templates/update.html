@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Update</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .update-wrap {
+      max-width: 560px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    .update-card {
+      background: var(--card-bg, #1e1e2e);
+      border: 1px solid var(--border, #333);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+    .update-card h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1.2rem;
+    }
+    .update-card p {
+      margin: 0 0 1.5rem;
+      color: var(--muted, #888);
+      font-size: 0.9rem;
+    }
+    .drop-zone {
+      border: 2px dashed var(--border, #555);
+      border-radius: 8px;
+      padding: 2.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      color: var(--muted, #888);
+      font-size: 0.95rem;
+    }
+    .drop-zone.dragover {
+      border-color: #4f8ef7;
+      background: rgba(79, 142, 247, 0.08);
+    }
+    .drop-zone input[type="file"] { display: none; }
+    .drop-zone .file-name {
+      margin-top: 0.6rem;
+      font-size: 0.85rem;
+      color: var(--text, #eee);
+    }
+    .update-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+      align-items: center;
+    }
+    .update-status {
+      font-size: 0.9rem;
+      flex: 1;
+    }
+    .update-status.ok  { color: #4caf50; }
+    .update-status.err { color: #f44336; }
+    .file-list {
+      margin-top: 1rem;
+      font-size: 0.8rem;
+      color: var(--muted, #888);
+      max-height: 160px;
+      overflow-y: auto;
+    }
+    .file-list li { list-style: none; padding: 0.15rem 0; }
+    .file-list li::before { content: "✓ "; color: #4caf50; }
+    .progress-bar-wrap {
+      height: 4px;
+      background: var(--border, #333);
+      border-radius: 2px;
+      margin-top: 1rem;
+      overflow: hidden;
+      display: none;
+    }
+    .progress-bar {
+      height: 100%;
+      background: #4f8ef7;
+      width: 0%;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MeshCore Repeater Monitor</h1>
+    <div class="subtitle">LoRa Mesh Network Dashboard</div>
+    <div class="status-bar">
+      <a href="/" class="logs-btn">&#8592; Dashboard</a>
+    </div>
+  </header>
+
+  <div class="update-wrap">
+    <div class="update-card">
+      <h2>Apply Dashboard Update</h2>
+      <p>Upload a <strong>.zip</strong> archive containing the updated source files.
+         Only dashboard source files will be replaced (app.py, config.py, data_store.py,
+         meshcore_poller.py, templates/, static/). The zip may include a top-level
+         folder (e.g. <code>meshcore-dashboard/</code>).</p>
+
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <div>Drag &amp; drop a <strong>.zip</strong> file here, or click to browse</div>
+        <div class="file-name" id="fileName"></div>
+        <input type="file" id="fileInput" accept=".zip" onchange="onFileChosen(this.files[0])">
+      </div>
+
+      <div class="progress-bar-wrap" id="progressWrap">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+
+      <div class="update-actions">
+        <button class="btn btn-primary" id="uploadBtn" onclick="doUpload()" disabled>Upload &amp; Apply</button>
+        <button class="btn btn-secondary" id="restartBtn" onclick="doRestart()" style="display:none">Restart Now</button>
+        <span class="update-status" id="updateStatus"></span>
+      </div>
+
+      <ul class="file-list" id="fileList"></ul>
+    </div>
+  </div>
+
+  <script>
+    let chosenFile = null;
+
+    const dropZone = document.getElementById('dropZone');
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const f = e.dataTransfer.files[0];
+      if (f) onFileChosen(f);
+    });
+
+    function onFileChosen(f) {
+      if (!f) return;
+      chosenFile = f;
+      document.getElementById('fileName').textContent = f.name + ' (' + (f.size / 1024).toFixed(1) + ' KB)';
+      document.getElementById('uploadBtn').disabled = false;
+      setStatus('', '');
+      document.getElementById('fileList').innerHTML = '';
+      document.getElementById('restartBtn').style.display = 'none';
+    }
+
+    function setStatus(msg, cls) {
+      const el = document.getElementById('updateStatus');
+      el.textContent = msg;
+      el.className = 'update-status ' + (cls || '');
+    }
+
+    async function doUpload() {
+      if (!chosenFile) return;
+      const btn = document.getElementById('uploadBtn');
+      btn.disabled = true;
+      setStatus('Uploading...', '');
+      document.getElementById('progressWrap').style.display = 'block';
+      document.getElementById('progressBar').style.width = '30%';
+      document.getElementById('fileList').innerHTML = '';
+      document.getElementById('restartBtn').style.display = 'none';
+
+      const fd = new FormData();
+      fd.append('file', chosenFile);
+
+      try {
+        const resp = await fetch('/api/update', { method: 'POST', body: fd });
+        document.getElementById('progressBar').style.width = '100%';
+        const data = await resp.json();
+        if (data.ok) {
+          setStatus('Update applied successfully. Restart to activate.', 'ok');
+          const ul = document.getElementById('fileList');
+          (data.files || []).forEach(f => {
+            const li = document.createElement('li');
+            li.textContent = f;
+            ul.appendChild(li);
+          });
+          document.getElementById('restartBtn').style.display = '';
+        } else {
+          setStatus('Error: ' + data.error, 'err');
+          btn.disabled = false;
+        }
+      } catch (e) {
+        setStatus('Network error: ' + e.message, 'err');
+        btn.disabled = false;
+      }
+    }
+
+    async function doRestart() {
+      const btn = document.getElementById('restartBtn');
+      btn.disabled = true;
+      setStatus('Restarting...', '');
+      try {
+        await fetch('/api/restart', { method: 'POST' });
+      } catch (_) { /* expected — server goes away */ }
+
+      // Poll until the server comes back
+      setStatus('Waiting for server to restart...', '');
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const r = await fetch('/');
+          if (r.ok) { window.location.href = '/'; return; }
+        } catch (_) {}
+      }
+      setStatus('Server did not respond after restart. Try refreshing manually.', 'err');
+      btn.disabled = false;
+    }
+  </script>
+</body>
+</html>

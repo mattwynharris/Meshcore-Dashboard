@@ -127,6 +127,15 @@ class DataStore:
         for r in configured:
             self.init_repeater(r["pubkey"], r["name"])
 
+    def reorder(self, pubkeys: list):
+        """Reorder the in-memory repeaters dict to match the given pubkey order."""
+        with self._lock:
+            ordered = {pk: self._repeaters[pk] for pk in pubkeys if pk in self._repeaters}
+            for pk, v in self._repeaters.items():
+                if pk not in ordered:
+                    ordered[pk] = v
+            self._repeaters = ordered
+
     def update_hops(self, pubkey: str, hops: int):
         """Update hop count without touching last_seen."""
         with self._lock:

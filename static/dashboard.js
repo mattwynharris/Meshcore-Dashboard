@@ -54,13 +54,22 @@ function formatUptime(seconds) {
 }
 
 
+// --- Card State ---
+
+window._pingCooldowns = window._pingCooldowns || {};
+window._pingTimers    = window._pingTimers    || {};
+window._pingResults   = window._pingResults   || {};
+window._currentData   = window._currentData   || [];
+window._cardOrder     = window._cardOrder     || [];
+
+
 // --- Render Dashboard ---
 
-function renderRepeaters(data) {
+function renderRepeaters(rawData) {
   var grid = document.getElementById('repeaterGrid');
   if (!grid) return;
 
-  if (!data || data.length === 0) {
+  if (!rawData || rawData.length === 0) {
     grid.innerHTML =
       '<div class="no-data">' +
         '<h2>Waiting for data...</h2>' +
@@ -69,23 +78,53 @@ function renderRepeaters(data) {
     return;
   }
 
+  // Apply user-defined card order
+  var data = rawData.slice();
+  if (window._cardOrder && window._cardOrder.length > 0) {
+    data.sort(function(a, b) {
+      var ai = window._cardOrder.indexOf(a.pubkey);
+      var bi = window._cardOrder.indexOf(b.pubkey);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+  }
+  window._currentData = data;
+
   grid.innerHTML = '';
 
-  // Get low battery threshold from settings (cached from last settings load)
   var lowBatPct = window._lowBatteryPercent || 20;
+  var now = Date.now() / 1000;
 
-  data.forEach(function(r) {
+  data.forEach(function(r, idx) {
     var bPct = batteryPercent(r.battery_mv);
     var bClass = batteryClass(r.battery_mv);
     var sClass = signalClass(r.rssi);
     var dotClass = r.online ? 'online' : (r.last_seen_epoch > 0 ? 'offline' : 'unknown');
     var isLowBat = r.battery_mv > 0 && bPct <= lowBatPct;
 
+    // Hops: show count (0 = direct/flood) or "--" if never seen
+    var hopsSeen = r.last_seen_epoch > 0;
+    var hopsLabel = hopsSeen ? r.hops : '--';
+    var hopsHeaderText = hopsSeen
+      ? ' &middot; ' + r.hops + ' hop' + (r.hops !== 1 ? 's' : '')
+      : '';
+
+    // Ping button state
+    var cooldown = window._pingCooldowns[r.pubkey] || 0;
+    var pingRemaining = Math.max(0, Math.ceil(cooldown - now));
+    var pingDisabled = pingRemaining > 0;
+    var pingResult = window._pingResults[r.pubkey];
+    var pingLabel = pingRemaining > 0 ? pingRemaining + 's' : 'Ping';
+    var pingClass = 'card-ping-btn';
+    if (pingRemaining > 0 && pingResult) {
+      pingClass += pingResult.ok ? ' ping-ok' : ' ping-fail';
+    }
+
     var card = document.createElement('div');
     card.className = 'card';
     card.setAttribute('data-pubkey', r.pubkey);
 
-    // Battery warning banner
     var warningHtml = '';
     if (isLowBat) {
       warningHtml = '<div class="battery-warning">LOW BATTERY - ' + bPct + '%</div>';
@@ -99,14 +138,13 @@ function renderRepeaters(data) {
         '<div>' +
           '<div class="card-name">' + escapeHtml(r.name) + '</div>' +
           '<div class="card-id">' + (r.pubkey_short || r.pubkey.substring(0, 12)) +
-            (r.hops > 0 ? ' &middot; ' + r.hops + ' hop' + (r.hops > 1 ? 's' : '') : '') +
+            hopsHeaderText +
           '</div>' +
           '<div class="card-route">' + (r.route_path ? 'Route: ' + escapeHtml(r.route_path) : 'Flood') + '</div>' +
         '</div>' +
         '<span class="status-dot ' + dotClass + '"></span>' +
       '</div>' +
       '<div class="metrics">' +
-        // Battery
         '<div class="metric">' +
           '<div class="metric-label">Battery</div>' +
           '<div class="metric-value ' + bClass + '">' +
@@ -120,7 +158,6 @@ function renderRepeaters(data) {
             '<div class="bar-fill" style="width:' + bPct + '%;background:' + batteryColor(r.battery_mv) + '"></div>' +
           '</div>' +
         '</div>' +
-        // RSSI
         '<div class="metric">' +
           '<div class="metric-label">RSSI</div>' +
           '<div class="metric-value ' + sClass + '">' +
@@ -128,7 +165,6 @@ function renderRepeaters(data) {
             '<span class="metric-unit"> dBm</span>' +
           '</div>' +
         '</div>' +
-        // SNR
         '<div class="metric">' +
           '<div class="metric-label">SNR</div>' +
           '<div class="metric-value">' +
@@ -136,7 +172,6 @@ function renderRepeaters(data) {
             '<span class="metric-unit"> dB</span>' +
           '</div>' +
         '</div>' +
-        // Noise Floor
         '<div class="metric">' +
           '<div class="metric-label">Noise Floor</div>' +
           '<div class="metric-value">' +
@@ -144,29 +179,95 @@ function renderRepeaters(data) {
             '<span class="metric-unit"> dBm</span>' +
           '</div>' +
         '</div>' +
-        // Uptime
         '<div class="metric">' +
           '<div class="metric-label">Uptime</div>' +
-          '<div class="metric-value">' +
-            formatUptime(r.uptime_seconds) +
-          '</div>' +
+          '<div class="metric-value">' + formatUptime(r.uptime_seconds) + '</div>' +
         '</div>' +
-        // Hops
         '<div class="metric">' +
           '<div class="metric-label">Hops</div>' +
-          '<div class="metric-value">' +
-            (r.hops > 0 ? r.hops : '--') +
-          '</div>' +
+          '<div class="metric-value">' + hopsLabel + '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="card-footer">Last seen: ' + timeAgo(r.last_seen_epoch) + '</div>';
+      '<div class="card-footer">' +
+        '<span class="card-footer-seen">Last seen: ' + timeAgo(r.last_seen_epoch) + '</span>' +
+        '<button class="' + pingClass + '" data-action="ping"' + (pingDisabled ? ' disabled' : '') + '>' + pingLabel + '</button>' +
+      '</div>';
 
-    card.addEventListener('click', function() {
+    // Card click → history (ignore button clicks)
+    card.addEventListener('click', function(e) {
+      if (e.target.tagName === 'BUTTON') return;
       showHistory(r.pubkey, r.name);
+    });
+
+    card.querySelector('[data-action="ping"]').addEventListener('click', function(e) {
+      e.stopPropagation();
+      pingRepeater(r.pubkey, e.currentTarget);
     });
 
     grid.appendChild(card);
   });
+}
+
+
+// --- Settings Row Ordering ---
+
+function moveRepeaterRow(row, direction) {
+  var list = document.getElementById('repeaterList');
+  if (!list) return;
+  if (direction === -1 && row.previousElementSibling) {
+    list.insertBefore(row, row.previousElementSibling);
+  } else if (direction === 1 && row.nextElementSibling) {
+    list.insertBefore(row.nextElementSibling, row);
+  }
+}
+
+
+// --- Ping ---
+
+function pingRepeater(pubkey, btn) {
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = '...';
+  btn.className = 'card-ping-btn';
+
+  fetch('/api/ping/' + encodeURIComponent(pubkey), { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(result) {
+      window._pingCooldowns[pubkey] = Date.now() / 1000 + 30;
+      window._pingResults[pubkey] = result;
+      if (result.ok) {
+        btn.textContent = result.latency_ms + 'ms';
+        btn.className = 'card-ping-btn ping-ok';
+      } else {
+        btn.textContent = 'Fail';
+        btn.className = 'card-ping-btn ping-fail';
+      }
+      _startPingCountdown(pubkey);
+    })
+    .catch(function() {
+      window._pingCooldowns[pubkey] = Date.now() / 1000 + 30;
+      window._pingResults[pubkey] = { ok: false };
+      btn.textContent = 'Err';
+      btn.className = 'card-ping-btn ping-fail';
+      _startPingCountdown(pubkey);
+    });
+}
+
+function _startPingCountdown(pubkey) {
+  if (window._pingTimers[pubkey]) clearInterval(window._pingTimers[pubkey]);
+  window._pingTimers[pubkey] = setInterval(function() {
+    var remaining = Math.max(0, Math.ceil(window._pingCooldowns[pubkey] - Date.now() / 1000));
+    var btn = document.querySelector('[data-pubkey="' + pubkey + '"] [data-action="ping"]');
+    if (remaining <= 0) {
+      clearInterval(window._pingTimers[pubkey]);
+      delete window._pingTimers[pubkey];
+      delete window._pingCooldowns[pubkey];
+      delete window._pingResults[pubkey];
+      if (btn) { btn.textContent = 'Ping'; btn.className = 'card-ping-btn'; btn.disabled = false; }
+      return;
+    }
+    if (btn) btn.textContent = remaining + 's';
+  }, 1000);
 }
 
 function escapeHtml(str) {
@@ -356,6 +457,10 @@ function addRepeaterRow(name, pubkey, adminPass, path) {
   var row = document.createElement('div');
   row.className = 'repeater-row';
   row.innerHTML =
+    '<div class="rpt-move-btns">' +
+      '<button class="card-move-btn rpt-move-up" title="Move up">&#8593;</button>' +
+      '<button class="card-move-btn rpt-move-down" title="Move down">&#8595;</button>' +
+    '</div>' +
     '<div class="settings-field">' +
       '<label>Name</label>' +
       '<input type="text" class="rpt-name" placeholder="My Repeater" value="' + escapeAttr(name || '') + '">' +
@@ -374,6 +479,12 @@ function addRepeaterRow(name, pubkey, adminPass, path) {
     '</div>' +
     '<button class="btn-remove" title="Remove">&times;</button>';
 
+  row.querySelector('.rpt-move-up').addEventListener('click', function() {
+    moveRepeaterRow(row, -1);
+  });
+  row.querySelector('.rpt-move-down').addEventListener('click', function() {
+    moveRepeaterRow(row, 1);
+  });
   row.querySelector('.btn-remove').addEventListener('click', function() {
     row.remove();
   });
@@ -429,6 +540,75 @@ function importSettingsFile(event) {
   };
   reader.readAsText(file);
 }
+
+
+// --- Settings: Software Update ---
+
+var _updateFile = null;
+
+function handleUpdateZip(input) {
+  var f = input.files[0];
+  input.value = '';
+  if (!f) return;
+  _updateFile = f;
+  document.getElementById('updateZipName').textContent = f.name + ' (' + (f.size / 1024).toFixed(0) + ' KB)';
+  document.getElementById('uploadUpdateBtn').disabled = false;
+  document.getElementById('updateResult').textContent = '';
+  document.getElementById('updateResult').className = 'update-result';
+}
+
+function doSettingsUpdate() {
+  if (!_updateFile) return;
+  var btn = document.getElementById('uploadUpdateBtn');
+  var resultEl = document.getElementById('updateResult');
+  btn.disabled = true;
+  resultEl.textContent = 'Uploading...';
+  resultEl.className = 'update-result';
+
+  var fd = new FormData();
+  fd.append('file', _updateFile);
+
+  fetch('/api/update', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        var count = (data.files || []).length;
+        resultEl.innerHTML = '<span class="update-ok">&#10003; ' + count + ' file' + (count !== 1 ? 's' : '') + ' applied.</span> ';
+        var rb = document.createElement('button');
+        rb.className = 'btn btn-primary';
+        rb.style.padding = '0.2rem 0.7rem';
+        rb.style.fontSize = '0.8rem';
+        rb.textContent = 'Restart Now';
+        rb.onclick = doSettingsRestart;
+        resultEl.appendChild(rb);
+        _updateFile = null;
+      } else {
+        resultEl.textContent = 'Error: ' + data.error;
+        resultEl.className = 'update-result err';
+        btn.disabled = false;
+      }
+    })
+    .catch(function(e) {
+      resultEl.textContent = 'Network error: ' + e.message;
+      resultEl.className = 'update-result err';
+      btn.disabled = false;
+    });
+}
+
+function doSettingsRestart() {
+  var resultEl = document.getElementById('updateResult');
+  resultEl.innerHTML = 'Restarting \u2014 page will reload when server is back\u2026';
+  resultEl.className = 'update-result';
+  fetch('/api/restart', { method: 'POST' }).catch(function() {});
+  function poll() {
+    fetch('/').then(function(r) {
+      if (r.ok) { window.location.reload(); }
+      else { setTimeout(poll, 2000); }
+    }).catch(function() { setTimeout(poll, 2000); });
+  }
+  setTimeout(poll, 2000);
+}
+
 
 function saveSettings() {
   clearSettingsStatus();
@@ -640,10 +820,15 @@ document.addEventListener('keydown', function(e) {
 // --- Init ---
 
 document.addEventListener('DOMContentLoaded', function() {
-  // Load low battery threshold
+  // Load settings (low battery threshold + initial card order)
   fetch('/api/settings')
     .then(function(r) { return r.json(); })
-    .then(function(s) { window._lowBatteryPercent = s.low_battery_percent || 20; })
+    .then(function(s) {
+      window._lowBatteryPercent = s.low_battery_percent || 20;
+      if (!window._cardOrder || window._cardOrder.length === 0) {
+        window._cardOrder = (s.repeaters || []).map(function(r) { return r.pubkey; });
+      }
+    })
     .catch(function() {});
 
   // Initial data fetch
