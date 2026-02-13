@@ -2,6 +2,8 @@
 
 Monitor your MeshCore LoRa repeaters from a web browser. Shows live battery, signal (RSSI/SNR), uptime, hops, and historical charts for each repeater.
 
+working along side a WIFI connected Node on port 5000
+
 <img width="1440" height="787" alt="Meshcore Dashboard" src="https://github.com/user-attachments/assets/c199bc15-1b07-4145-9d10-d8d11f932af8" />
 
 ---
