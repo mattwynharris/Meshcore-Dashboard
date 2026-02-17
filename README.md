@@ -33,7 +33,7 @@ sudo usermod -aG docker $USER
 
 ```bash
 # Run these on the VM
-git clone https://github.com/YOUR_USERNAME/meshcore-dashboard.git
+git clone https://github.com/mattwynharris/meshcore-dashboard.git
 cd meshcore-dashboard
 bash install.sh
 ```
