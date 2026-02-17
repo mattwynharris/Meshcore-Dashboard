@@ -4,7 +4,10 @@ Monitor your MeshCore LoRa repeaters from a web browser. Shows live battery, sig
 
 working along side a WIFI connected Node on port 5000
 
-<img width="1440" height="787" alt="Meshcore Dashboard" src="https://github.com/user-attachments/assets/c199bc15-1b07-4145-9d10-d8d11f932af8" />
+<img width="435" height="760" alt="Screenshot 2026-02-17 at 11 53 46 AM" src="https://github.com/user-attachments/assets/78121781-7c35-40ee-ad67-591ddce26bdb" />
+<img width="435" height="749" alt="Screenshot 2026-02-17 at 11 53 38 AM" src="https://github.com/user-attachments/assets/b3286a2e-1218-4a0d-837d-30bf6feea7f4" />
+<img width="435" height="743" alt="Screenshot 2026-02-17 at 11 54 04 AM" src="https://github.com/user-attachments/assets/34d03925-596f-4374-84ad-6a0f71d82042" />
+
 
 ---
 
