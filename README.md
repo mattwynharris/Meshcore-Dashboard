@@ -4,9 +4,12 @@ Monitor your MeshCore LoRa repeaters from a web browser. Shows live battery, sig
 
 working along side a WIFI connected Node on port 5000
 
-<img width="435" height="760" alt="Screenshot 2026-02-17 at 11 53 46 AM" src="https://github.com/user-attachments/assets/78121781-7c35-40ee-ad67-591ddce26bdb" />
-<img width="435" height="749" alt="Screenshot 2026-02-17 at 11 53 38 AM" src="https://github.com/user-attachments/assets/b3286a2e-1218-4a0d-837d-30bf6feea7f4" />
-<img width="435" height="743" alt="Screenshot 2026-02-17 at 11 54 04 AM" src="https://github.com/user-attachments/assets/34d03925-596f-4374-84ad-6a0f71d82042" />
+<img width="1440" height="669" alt="Screenshot 2026-03-26 at 9 15 12 PM" src="https://github.com/user-attachments/assets/abb5a441-5d56-4c64-9bdf-246d5cb888b5" />
+<img width="1432" height="743" alt="Screenshot 2026-03-26 at 9 21 55 PM" src="https://github.com/user-attachments/assets/ee86711c-0dfb-40c3-9929-c45e88420d12" />
+<img width="1430" height="761" alt="Screenshot 2026-03-26 at 9 15 55 PM" src="https://github.com/user-attachments/assets/a7b0f055-590c-4d68-b0e4-ff17c1c21dc3" />
+<img width="1434" height="737" alt="Screenshot 2026-03-26 at 9 15 34 PM" src="https://github.com/user-attachments/assets/0871532f-6cde-4ba2-8ee2-6f9983ae7ef7" />
+<img width="1431" height="743" alt="Screenshot 2026-03-26 at 9 22 50 PM" src="https://github.com/user-attachments/assets/9e41593f-8e93-4507-acd7-8a0dd3eaec68" />
+
 
 
 ---
