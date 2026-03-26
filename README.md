@@ -2,10 +2,7 @@
 
 A self-hosted web dashboard for monitoring MeshCore LoRa repeaters and contacts via a companion WiFi node.
 
----
-<img width="1440" height="669" alt="Screenshot 2026-03-26 at 9 15 12 PM" src="https://github.com/user-attachments/assets/a0aacd82-5f93-4eec-a61f-1dbf62895e44" />
-<img width="1430" height="761" alt="Screenshot 2026-03-26 at 9 15 55 PM" src="https://github.com/user-attachments/assets/5c57ad33-fe68-4ddb-b409-cd4b2faed2c9" />
-<img width="1431" height="743" alt="Screenshot 2026-03-26 at 9 22 50 PM" src="https://github.com/user-attachments/assets/2b611ffe-5f00-4e1b-9a40-574e7a72d9df" />
+**Requirement:** You need a MeshCore WiFi companion node running and accessible on your network. The companion node must have TCP enabled — it listens on port **5000** by default.
 
 ## Features
 
@@ -18,6 +15,12 @@ A self-hosted web dashboard for monitoring MeshCore LoRa repeaters and contacts 
 - **Packets** — raw RX log / packet feed
 - **Logs** — app and poller activity log
 - **Settings** — configure companion IP, repeater list (name, pubkey, admin password), poll timing, and software updates
+
+
+---
+<img width="1440" height="669" alt="Screenshot 2026-03-26 at 9 15 12 PM" src="https://github.com/user-attachments/assets/a0aacd82-5f93-4eec-a61f-1dbf62895e44" />
+<img width="1430" height="761" alt="Screenshot 2026-03-26 at 9 15 55 PM" src="https://github.com/user-attachments/assets/5c57ad33-fe68-4ddb-b409-cd4b2faed2c9" />
+<img width="1431" height="743" alt="Screenshot 2026-03-26 at 9 22 50 PM" src="https://github.com/user-attachments/assets/2b611ffe-5f00-4e1b-9a40-574e7a72d9df" />
 
 ---
 ## VM Requirement 
