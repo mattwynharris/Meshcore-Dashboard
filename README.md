@@ -20,7 +20,7 @@ A self-hosted web dashboard for monitoring MeshCore LoRa repeaters and contacts 
 - **Settings** — configure companion IP, repeater list (name, pubkey, admin password), poll timing, and software updates
 
 ---
-## Features VM Requirement 
+## VM Requirement 
 - Guest OS Ubuntu Linux (64-bit)
 - Compatibility ESXi 7.0 U2 virtual machine
 - VMware Tools Yes
