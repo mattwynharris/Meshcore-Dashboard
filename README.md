@@ -66,7 +66,7 @@ The dashboard starts polling your repeaters straight away.
 
 No SSH needed — updates are applied through the dashboard UI.
 
-1. Download the latest `meshcore-dashboard-update-VX.X.zip` from the [Releases page](https://github.com/mattwyn-harris/meshcore-dashboard/releases)
+1. Download the latest `meshcore-dashboard-update-VX.X.zip` from the [Releases page](https://github.com/mattwynharris/Meshcore-Dashboard/releases)
 2. Open **Settings** → scroll to **Software Update**
 3. Click **Choose .zip…** → select the downloaded zip → click **Upload & Apply**
 4. Click **Restart Now** — the page reloads automatically
