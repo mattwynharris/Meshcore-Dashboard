@@ -43,8 +43,8 @@ sudo usermod -aG docker $USER
 ### 2. Clone the repo and run setup
 
 ```bash
-git clone https://github.com/mattwynharris/meshcore-dashboard.git
-cd meshcore-dashboard
+git clone https://github.com/mattwynharris/Meshcore-Dashboard.git
+cd Meshcore-Dashboard
 bash install.sh
 ```
 
