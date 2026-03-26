@@ -30,7 +30,9 @@ A self-hosted web dashboard for monitoring MeshCore LoRa repeaters and contacts 
 ---
 ## Installation
 
-### 1. Install Docker on your device
+### 1. Set Up VM and Install Docker on your device
+Set up your VM OS Ubuntu Linux 
+then SSH in to your VM 
 
 ```bash
 curl -fsSL https://get.docker.com | sh
