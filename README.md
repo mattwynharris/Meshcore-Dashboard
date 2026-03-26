@@ -97,3 +97,7 @@ Everything is stored in `~/meshcore-dashboard/data/` on the host — outside the
 
 - `data/settings.json` — companion IP, repeater list, poll timing
 - `data/repeater_history.db` — telemetry history, activity logs, contact routes
+
+---
+
+*This project is an independent, community-built tool and is not affiliated with, endorsed by, or officially connected to MeshCore or its developers.*
