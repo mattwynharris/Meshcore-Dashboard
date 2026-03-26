@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Network Map - MeshCore Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/leaflet.css">
+  <style>
+    /* Override global body padding so the map fills the full viewport */
+    html, body { height: 100%; margin: 0; padding: 0 !important; overflow: hidden; }
+
+    /* Override global header bottom margin so it doesn't push the map out */
+    header { margin-bottom: 0 !important; }
+
+    .map-wrap {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .map-body {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      min-height: 0; /* required for flex children to shrink below content size */
+    }
+
+    #leaflet-map {
+      position: absolute;
+      top: 0; right: 0; bottom: 0; left: 0;
+      background: #0f172a;
+    }
+
+    /* No-GPS sidebar panel */
+    .map-no-gps {
+      position: absolute;
+      bottom: 1rem;
+      right: 1rem;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.93);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 0.65rem 0.9rem;
+      min-width: 180px;
+      max-width: 260px;
+      font-size: 0.78rem;
+      color: #94a3b8;
+      display: none;
+    }
+    .map-no-gps-title {
+      font-weight: 600;
+      color: #64748b;
+      margin-bottom: 0.4rem;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .map-no-gps-item {
+      padding: 0.15rem 0;
+      color: #94a3b8;
+    }
+    .map-no-gps-item span.dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #475569;
+      margin-right: 0.4rem;
+      vertical-align: middle;
+    }
+
+    /* Leaflet popup overrides */
+    .leaflet-popup-content-wrapper {
+      background: #1e293b;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    .leaflet-popup-tip { background: #1e293b; }
+    .leaflet-popup-content { margin: 10px 14px; font-size: 0.82rem; line-height: 1.6; }
+    .popup-name { font-size: 0.95rem; font-weight: 700; color: #38bdf8; margin-bottom: 0.3rem; }
+    .popup-row { display: flex; justify-content: space-between; gap: 1.5rem; }
+    .popup-label { color: #64748b; }
+    .popup-val { color: #e2e8f0; font-weight: 500; }
+    .popup-online { color: #4ade80; }
+    .popup-offline { color: #f87171; }
+    .popup-unknown { color: #94a3b8; }
+
+    /* Top-right button bar */
+    .map-btn-bar {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      z-index: 1000;
+      display: flex;
+      gap: 0.4rem;
+    }
+    .map-refresh-btn, .map-sethome-btn, .map-contacts-btn {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid #334155;
+      color: #94a3b8;
+      border-radius: 8px;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.78rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: color 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+    .map-refresh-btn:hover { color: #38bdf8; border-color: #38bdf8; }
+    .map-sethome-btn:hover { color: #facc15; border-color: #facc15; }
+    .map-contacts-btn:hover { color: #a78bfa; border-color: #a78bfa; }
+    .map-paths-btn { background: rgba(15, 23, 42, 0.9); border: 1px solid #334155; color: #94a3b8;
+      border-radius: 8px; padding: 0.35rem 0.75rem; font-size: 0.78rem; cursor: pointer;
+      font-family: inherit; transition: color 0.2s, border-color 0.2s; white-space: nowrap; }
+    .map-paths-btn:hover { color: #34d399; border-color: #34d399; }
+    .map-paths-btn.active { color: #34d399; border-color: #34d399; background: rgba(52,211,153,0.1); }
+    .map-sethome-btn.picking {
+      color: #facc15;
+      border-color: #facc15;
+      background: rgba(250, 204, 21, 0.12);
+    }
+    .map-contacts-btn.active {
+      color: #a78bfa;
+      border-color: #a78bfa;
+      background: rgba(167, 139, 250, 0.12);
+    }
+    /* crosshair cursor while in pick mode */
+    .map-picking { cursor: crosshair !important; }
+
+    /* Legend overlay */
+    .map-legend {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 0.55rem 0.8rem;
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+    .legend-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.1rem 0; }
+    .legend-dot {
+      width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+    }
+    .legend-dot.online  { background: #4ade80; }
+    .legend-dot.offline { background: #f87171; }
+    .legend-dot.unknown { background: #64748b; }
+    .legend-dot.gateway { background: #38bdf8; }
+
+    /* Node name labels */
+    .map-label {
+      background: rgba(15, 23, 42, 0.82) !important;
+      border: none !important;
+      box-shadow: none !important;
+      color: #e2e8f0 !important;
+      font-size: 0.72rem !important;
+      font-weight: 600 !important;
+      padding: 1px 5px !important;
+      border-radius: 3px !important;
+      white-space: nowrap !important;
+      pointer-events: none !important;
+    }
+    .map-label::before { display: none !important; }
+    .map-label-advert { color: #c4b5fd !important; }
+
+    /* Animated topology lines — dash flows toward the gateway.
+       Large offset (100 repeats of 18px) so the loop reset happens every ~3 min
+       rather than every 1.8s, eliminating the visible jolt. */
+    @keyframes dash-flow {
+      to { stroke-dashoffset: -1800; }
+    }
+
+    /* Neighbour highlight panel */
+    .map-neighbour-panel {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.93);
+      border: 1px solid #f59e0b;
+      border-radius: 10px;
+      padding: 0.65rem 0.9rem;
+      min-width: 190px;
+      max-width: 270px;
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }
+    .map-neighbour-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      color: #f59e0b;
+      font-size: 0.85rem;
+      margin-bottom: 0.35rem;
+    }
+    .map-neighbour-header button {
+      background: none;
+      border: none;
+      color: #64748b;
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 0 0.2rem;
+      line-height: 1;
+    }
+    .map-neighbour-header button:hover { color: #94a3b8; }
+    .map-neighbour-subtitle {
+      font-size: 0.68rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.4rem;
+    }
+    .map-neighbour-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.15rem 0;
+      color: #e2e8f0;
+    }
+    .map-neighbour-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .map-neighbour-gw { color: #38bdf8; }
+
+  </style>
+</head>
+<body>
+
+<div class="map-wrap">
+
+  <header>
+    <div class="header-title">
+      <h1>MeshCore Repeater Monitor</h1>
+      <div class="subtitle">LoRa Mesh Network Dashboard</div>
+    </div>
+    <nav class="nav-group">
+      <a href="/" class="nav-btn" title="Dashboard">Dashboard</a>
+      <a href="/map" class="nav-btn nav-btn-active" title="Network Map">Map</a>
+      <a href="/messages" class="nav-btn" title="Messages">Messages</a>
+      <a href="/packets" class="nav-btn" title="Packets">Packets</a>
+      <a href="/logs" class="nav-btn" title="Activity Logs">Logs</a>
+      <a href="/settings" class="nav-btn nav-settings" title="Settings">&#9881;</a>
+    </nav>
+  </header>
+
+  <div class="map-body">
+    <div id="leaflet-map"></div>
+
+    <!-- Legend -->
+    <div class="map-legend">
+      <div class="legend-row"><div class="legend-dot gateway"></div> Gateway</div>
+      <div class="legend-row" style="font-size:0.68rem;color:#64748b;margin:0.25rem 0 0.1rem;">Node fill = status</div>
+      <div class="legend-row"><div class="legend-dot online"></div> Online</div>
+      <div class="legend-row"><div class="legend-dot offline"></div> Offline</div>
+      <div class="legend-row"><div class="legend-dot unknown"></div> Not polled</div>
+      <div class="legend-row" style="font-size:0.68rem;color:#64748b;margin-top:0.25rem;">Contacts (All mode)</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#22d3ee"></div> Contact</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#7c3aed"></div> Advert</div>
+      <div class="legend-row" style="font-size:0.68rem;color:#64748b;margin-top:0.25rem;">Paths layer</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#34d399;border-radius:2px"></div> Single route</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#f59e0b;border-radius:2px"></div> Shared segment</div>
+    </div>
+
+    <!-- Top-right button bar -->
+    <div class="map-btn-bar">
+      <button class="map-sethome-btn" id="setHomeBtn" onclick="togglePickHome()">&#8962; Set Home</button>
+      <button class="map-contacts-btn" id="contactsBtn" onclick="toggleAllContacts()">&#9788; All Contacts</button>
+      <button class="map-paths-btn" id="pathsBtn" onclick="togglePaths()">&#8627; Paths</button>
+      <button class="map-refresh-btn" onclick="loadMap()">Refresh</button>
+    </div>
+
+    <!-- No-GPS panel -->
+    <div class="map-no-gps" id="noGpsPanel">
+      <div class="map-no-gps-title">No GPS data</div>
+      <div id="noGpsList"></div>
+    </div>
+
+    <!-- Neighbour highlight panel -->
+    <div class="map-neighbour-panel" id="neighbourPanel" style="display:none">
+      <div class="map-neighbour-header">
+        <span id="neighbourNodeName"></span>
+        <button onclick="clearNeighbourSelection()" title="Close">&#x2715;</button>
+      </div>
+      <div class="map-neighbour-subtitle">Direct RF Neighbours</div>
+      <div id="neighbourList"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/leaflet.min.js"></script>
+<script>
+  // Dark-style tile layer using CartoDB dark matter (no API key)
+  // Default view: New Zealand
+  var map = L.map('leaflet-map', { zoomControl: true }).setView([-41.0, 174.0], 6);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(map);
+
+  // Ensure Leaflet recalculates the map size after the page fully renders
+  setTimeout(function() { map.invalidateSize(); }, 100);
+
+  var _markers = {};       // pubkey -> L.circleMarker
+  var _linkLines = {};     // "pk1|pk2" -> L.polyline  (one segment per adjacent pair)
+  var _homeMarker = null;
+  var _lastMapData = null; // cached last /api/map response (used by paths layer)
+  var _pubkeyMap = {};     // pubkey_short -> repeater object (for route matching)
+  var _didInitialFit = false; // auto-fit only once on first load with GPS data
+  var _nodeColors = {};    // pubkey -> unique color from palette
+  var _mapNodeNames = {};  // 2-char hex prefix (upper) -> name, from node_names cache
+
+  // Neighbour-toggle state
+  var _selectedPubkey = null;  // pubkey of currently selected node (null = none)
+  var _neighbourLayer = L.layerGroup().addTo(map);  // overlay for halos + lines
+  var _adjacency = {};         // full pubkey -> [neighbour full pubkeys / '__home__']
+  var _nodeNameMap = {};       // full pubkey -> display name (including '__home__')
+  var _contactMap = {};        // 2-char pubkey prefix -> contact obj (unknown/non-configured contacts)
+  var _contactsLayer = L.layerGroup().addTo(map);  // layer for "show all contacts" mode
+  var _advertLayer = L.layerGroup().addTo(map);    // always-on layer for advert-discovered nodes
+  var _pathsLayer = L.layerGroup().addTo(map);     // layer for "show all paths" toggle
+  var _showingAllContacts = false;    // toggle state
+  var _showingPaths = false;          // paths toggle state
+  var _highlightedRepeater = null;    // pubkey of repeater whose path is isolated (null = show all)
+  var _pathsStateBeforeHighlight = false; // saved _showingPaths before a repeater was clicked
+  var _allContactsData = [];          // latest contacts array from /api/map
+  var _allNodeLatLng = {};            // 2-char pubkey prefix (lower) -> {lat, lon, name}
+
+  // Distinct colours for each node's ring and line (status shown separately as fill)
+  var NODE_PALETTE = [
+    '#f59e0b', // amber
+    '#8b5cf6', // violet
+    '#ec4899', // pink
+    '#06b6d4', // cyan
+    '#84cc16', // lime
+    '#f97316', // orange
+    '#a78bfa', // purple-400
+    '#34d399', // emerald
+    '#fb923c', // orange-400
+    '#60a5fa', // blue-400
+  ];
+
+  function battPct(mv) {
+    if (!mv || mv <= 0) return null;
+    var pct = (mv - 3000) / (4200 - 3000) * 100;
+    return Math.max(0, Math.min(100, Math.round(pct)));
+  }
+
+  function markerColor(r) {
+    if (r.poll_ok === true) return '#4ade80';
+    if (r.poll_ok === false) return '#f87171';
+    // Never polled — if we have a recent last_seen, still show as online
+    var recentSec = 3600;  // 1 hour
+    if (r.last_seen_epoch && (Date.now() / 1000 - r.last_seen_epoch) < recentSec) return '#4ade80';
+    return '#64748b';
+  }
+
+  function loadNodeNames() {
+    fetch('/api/node-names')
+      .then(function(r) { return r.json(); })
+      .then(function(d) { _mapNodeNames = d || {}; })
+      .catch(function() {});
+  }
+
+  function buildRouteChainMap(r) {
+    var chain = [r.name];
+    if (r.route_path) {
+      var segs = r.route_path.replace(/\s/g, '').split('>');
+      segs.forEach(function(seg) {
+        var node = _pubkeyMap[seg.toLowerCase()];
+        chain.push(node ? node.name : seg);
+      });
+    } else if (r.hops > 0) {
+      for (var i = 0; i < r.hops; i++) chain.push('?');
+    }
+    chain.push('GW');
+    return chain.join(' \u2192 ');
+  }
+
+  function popupHtml(r) {
+    var pct = battPct(r.battery_mv);
+    var battStr = pct !== null ? pct + '% (' + (r.battery_mv / 1000).toFixed(2) + 'V)' : '—';
+    var statusCls = r.poll_ok === true ? 'popup-online' : (r.poll_ok === null || r.poll_ok === undefined ? 'popup-unknown' : 'popup-offline');
+    var statusStr = r.poll_ok === true ? 'Online' : (r.poll_ok === null || r.poll_ok === undefined ? 'Not polled' : 'Offline');
+    var lastSeen = r.last_seen_epoch ? new Date(r.last_seen_epoch * 1000).toLocaleTimeString() : '—';
+    var fw = r.fw_version || '—';
+    var hopsStr = r.last_seen_epoch ? (r.hops === 0 ? 'Direct' : r.hops + ' hop' + (r.hops !== 1 ? 's' : '')) : '—';
+    var routeChain = r.last_seen_epoch ? buildRouteChainMap(r) : null;
+    return (
+      '<div class="popup-name">' + r.name + '</div>' +
+      '<div class="popup-row"><span class="popup-label">Status</span><span class="popup-val ' + statusCls + '">' + statusStr + '</span></div>' +
+      '<div class="popup-row"><span class="popup-label">Battery</span><span class="popup-val">' + battStr + '</span></div>' +
+      '<div class="popup-row"><span class="popup-label">RSSI</span><span class="popup-val">' + (r.rssi ? r.rssi + ' dBm' : '—') + '</span></div>' +
+      '<div class="popup-row"><span class="popup-label">SNR</span><span class="popup-val">' + (r.snr ? r.snr.toFixed(1) + ' dB' : '—') + '</span></div>' +
+      '<div class="popup-row"><span class="popup-label">Hops</span><span class="popup-val">' + hopsStr + '</span></div>' +
+      (routeChain ? '<div class="popup-row"><span class="popup-label">Route</span><span class="popup-val" style="font-size:0.78rem">' + routeChain + '</span></div>' : '') +
+      '<div class="popup-row"><span class="popup-label">Last seen</span><span class="popup-val">' + lastSeen + '</span></div>' +
+      '<div class="popup-row"><span class="popup-label">FW</span><span class="popup-val">' + fw + '</span></div>'
+    );
+  }
+
+  // Build bidirectional adjacency map from route_path data.
+  // Must be called after _pubkeyMap is rebuilt each render cycle.
+  function buildAdjacency(repeaters, home) {
+    _adjacency = {};
+    _nodeNameMap = {};
+    var homePk = '__home__';
+
+    if (home && home.name) _nodeNameMap[homePk] = home.name;
+    repeaters.forEach(function(r) {
+      if (r.pubkey) _nodeNameMap[r.pubkey] = r.name;
+    });
+    // Include unknown contacts in name map
+    Object.keys(_contactMap).forEach(function(prefix) {
+      var c = _contactMap[prefix];
+      if (c.pubkey) _nodeNameMap[c.pubkey] = c.name;
+    });
+
+    function addEdge(a, b) {
+      if (!_adjacency[a]) _adjacency[a] = [];
+      if (_adjacency[a].indexOf(b) === -1) _adjacency[a].push(b);
+      if (!_adjacency[b]) _adjacency[b] = [];
+      if (_adjacency[b].indexOf(a) === -1) _adjacency[b].push(a);
+    }
+
+    function buildChain(pubkey, route_path, hops) {
+      var chain = [homePk];
+      if (route_path) {
+        var segs = route_path.replace(/\s/g, '').split('>');
+        segs.forEach(function(seg) {
+          var segLower = seg.toLowerCase();
+          var intermediate = _pubkeyMap[segLower];
+          if (intermediate && intermediate.pubkey !== pubkey) {
+            chain.push(intermediate.pubkey);
+          } else if (!intermediate) {
+            var unk = _contactMap[segLower];
+            if (unk && unk.pubkey && unk.pubkey !== pubkey) {
+              chain.push(unk.pubkey);
+            }
+          }
+        });
+      }
+      chain.push(pubkey);
+      for (var i = 0; i < chain.length - 1; i++) {
+        addEdge(chain[i], chain[i + 1]);
+      }
+    }
+
+    // Process configured repeaters
+    repeaters.forEach(function(r) {
+      if (r.pubkey) buildChain(r.pubkey, r.route_path, r.hops);
+    });
+
+    // Also process unknown contacts' route paths — this finds edges like
+    // "unknown node B routes through your repeater A" → A and B are neighbours
+    Object.keys(_contactMap).forEach(function(prefix) {
+      var c = _contactMap[prefix];
+      if (c.pubkey) buildChain(c.pubkey, c.route_path, c.hops);
+    });
+  }
+
+  function loadMap() {
+    fetch('/api/map')
+      .then(function(r) { return r.json(); })
+      .then(function(data) { renderMap(data); })
+      .catch(function() {});
+  }
+
+  function renderMap(data) {
+    _lastMapData = data;
+    var home = data.home || {};
+    var repeaters = data.repeaters || [];
+    var bounds = [];
+
+    // Build a lookup: pubkey prefix -> repeater, keyed by BOTH 1-byte (2 hex) and 2-byte (4 hex)
+    // so route_path segments work under both old and new meshcore firmware
+    _pubkeyMap = {};
+    repeaters.forEach(function(r, idx) {
+      if (r.pubkey && r.pubkey.length >= 2) _pubkeyMap[r.pubkey.substring(0, 2).toLowerCase()] = r;
+      if (r.pubkey && r.pubkey.length >= 4) _pubkeyMap[r.pubkey.substring(0, 4).toLowerCase()] = r;
+      // Assign a stable unique colour from the palette (persists across refreshes)
+      if (!_nodeColors[r.pubkey]) {
+        _nodeColors[r.pubkey] = NODE_PALETTE[idx % NODE_PALETTE.length];
+      }
+    });
+
+    // Store all contacts for the "show all" toggle and neighbour discovery
+    _allContactsData = data.contacts || [];
+
+    // Render advert-discovered nodes (always visible, distinct style)
+    renderAdvertLayer(data.advert_nodes || [], repeaters);
+
+    // Build lookup of unknown (non-configured) contacts BEFORE adjacency so they
+    // can be resolved as intermediates inside buildAdjacency()
+    _contactMap = {};
+    _allContactsData.forEach(function(c) {
+      if (c.configured) return;  // already shown as a regular marker
+      if (!c.pubkey || c.pubkey.length < 2) return;
+      _contactMap[c.pubkey.substring(0, 2).toLowerCase()] = c;
+      if (c.pubkey.length >= 4) _contactMap[c.pubkey.substring(0, 4).toLowerCase()] = c;
+    });
+
+    // Rebuild neighbour adjacency from current route_path data
+    // (includes unknown contacts' own paths to find all edges)
+    buildAdjacency(repeaters, home);
+
+    // Refresh "show all contacts" layer if it's currently on
+    if (_showingAllContacts) renderContactsLayer();
+
+    // Rebuild node lat/lon lookup (used by paths layer)
+    rebuildAllNodeLatLng(data);
+
+    // Refresh paths layer if it's currently on
+    if (_showingPaths) renderPathsLayer();
+
+    // --- Home/gateway marker ---
+    if (home.lat && home.lon) {
+      var homeLatLng = [home.lat, home.lon];
+      bounds.push(homeLatLng);
+      if (!_homeMarker) {
+        _homeMarker = L.circleMarker(homeLatLng, {
+          radius: 10,
+          fillColor: '#38bdf8',
+          color: '#0ea5e9',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.9
+        }).addTo(map)
+          .bindPopup('<div class="popup-name">' + (home.name || 'Gateway') + '</div><div style="color:#64748b;font-size:0.78rem">Local node</div>')
+          .bindTooltip(home.name || 'Gateway', { permanent: true, direction: 'top', className: 'map-label', offset: [0, -10] });
+      } else {
+        _homeMarker.setLatLng(homeLatLng);
+      }
+    }
+
+    // --- No-GPS list ---
+    var noGps = repeaters.filter(function(r) { return !r.lat || !r.lon; });
+    var noGpsEl = document.getElementById('noGpsList');
+    var noGpsPanel = document.getElementById('noGpsPanel');
+    if (noGps.length > 0) {
+      noGpsPanel.style.display = 'block';
+      noGpsEl.innerHTML = noGps.map(function(r) {
+        return '<div class="map-no-gps-item"><span class="dot"></span>' + r.name + '</div>';
+      }).join('');
+    } else {
+      noGpsPanel.style.display = 'none';
+    }
+
+    // --- Repeater markers ---
+    // Outer ring = node's unique colour; inner fill = poll status (green/red/grey)
+    var seenKeys = {};
+    repeaters.forEach(function(r) {
+      if (!r.lat || !r.lon) return;
+      seenKeys[r.pubkey] = true;
+      var latlng = [r.lat, r.lon];
+      bounds.push(latlng);
+      var statusColor = markerColor(r);
+      var ringColor = _nodeColors[r.pubkey] || '#94a3b8';
+
+      if (_markers[r.pubkey]) {
+        _markers[r.pubkey].setLatLng(latlng);
+        _markers[r.pubkey].setStyle({ fillColor: statusColor, color: ringColor, weight: 3 });
+      } else {
+        _markers[r.pubkey] = L.circleMarker(latlng, {
+          radius: 9,
+          fillColor: statusColor,
+          color: ringColor,
+          weight: 3,
+          opacity: 1,
+          fillOpacity: 0.9
+        }).addTo(map)
+          .bindTooltip(r.name, { permanent: true, direction: 'top', className: 'map-label', offset: [0, -12] })
+          .on('click', (function(pk) {
+            return function(e) {
+              L.DomEvent.stopPropagation(e);
+              if (_selectedPubkey === pk) {
+                clearNeighbourSelection();
+              } else {
+                _selectedPubkey = pk;
+                applyNeighbourHighlight(pk);
+              }
+              // Highlight just this repeater's path(s)
+              if (_highlightedRepeater === pk) {
+                // Same repeater clicked again — restore previous state
+                _clearPathHighlight();
+              } else {
+                _pathsStateBeforeHighlight = _showingPaths;
+                _highlightedRepeater = pk;
+                if (!_showingPaths) {
+                  _showingPaths = true;
+                  document.getElementById('pathsBtn').classList.add('active');
+                }
+                renderPathsLayer();
+              }
+            };
+          })(r.pubkey));
+      }
+    });
+
+    // Remove stale markers for deleted repeaters
+    Object.keys(_markers).forEach(function(pk) {
+      if (!seenKeys[pk]) {
+        map.removeLayer(_markers[pk]);
+        delete _markers[pk];
+      }
+    });
+
+    // --- Topology link segments ---
+    // Collect ALL lines per segment (multiple repeaters can share the same link).
+    var homePk = '__home__';
+    var nodeLatLng = {};  // pk -> [lat, lon]
+    if (home.lat && home.lon) nodeLatLng[homePk] = [home.lat, home.lon];
+    repeaters.forEach(function(r) {
+      if (r.lat && r.lon) nodeLatLng[r.pubkey] = [r.lat, r.lon];
+    });
+
+    // newLinks[key] = array of {pts, color} — one entry per repeater using that segment
+    var newLinks = {};
+
+    repeaters.forEach(function(r) {
+      if (!r.lat || !r.lon) return;
+      var nodeColor = _nodeColors[r.pubkey] || '#94a3b8';
+
+      // Build the ordered chain: [home, ...intermediates, repeater]
+      var chain = [homePk];
+      if (r.route_path && r.hops > 0) {
+        var segments = r.route_path.replace(/\s/g, '').split('>');
+        segments.forEach(function(seg) {
+          var intermediate = _pubkeyMap[seg.toLowerCase()];
+          if (intermediate && intermediate.pubkey !== r.pubkey) {
+            chain.push(intermediate.pubkey);
+          }
+        });
+      }
+      chain.push(r.pubkey);
+
+      for (var i = 0; i < chain.length - 1; i++) {
+        var a = chain[i], b = chain[i + 1];
+        var key = a < b ? a + '|' + b : b + '|' + a;
+        if (nodeLatLng[a] && nodeLatLng[b]) {
+          if (!newLinks[key]) newLinks[key] = [];
+          // Points drawn repeater-side → home-side so animation flows toward GW
+          newLinks[key].push({ pts: [nodeLatLng[b], nodeLatLng[a]], color: nodeColor });
+        }
+      }
+    });
+
+    // Perpendicular offset — shifts a pair of lat/lon points sideways by offsetDeg
+    function perpOffset(pts, offsetDeg) {
+      var lat1 = pts[0][0], lon1 = pts[0][1], lat2 = pts[1][0], lon2 = pts[1][1];
+      var dlat = lat2 - lat1;
+      var cosLat = Math.cos((lat1 + lat2) / 2 * Math.PI / 180);
+      var dlon = (lon2 - lon1) * cosLat;
+      var len = Math.sqrt(dlat * dlat + dlon * dlon) || 1;
+      var ox = -dlon / len * offsetDeg;
+      var oy = dlat / len * offsetDeg / cosLat;
+      return [[lat1 + ox, lon1 + oy], [lat2 + ox, lon2 + oy]];
+    }
+
+    // Only apply animation when a line is first created — avoids jolt on refresh.
+    // Duration matches keyframe: 1800px offset at 10px/s = 180s per full cycle.
+    function applyLinkAnim(line) {
+      var el = line.getElement ? line.getElement() : null;
+      if (el) el.style.animation = 'dash-flow 180s linear infinite';
+    }
+
+    // Remove stale keys entirely
+    Object.keys(_linkLines).forEach(function(key) {
+      if (!newLinks[key]) {
+        _linkLines[key].forEach(function(line) { map.removeLayer(line); });
+        delete _linkLines[key];
+      }
+    });
+
+    // Add or update — parallel lines offset perpendicularly when N > 1
+    var OFFSET = 0.00025; // degrees offset per line spacing
+    Object.keys(newLinks).forEach(function(key) {
+      var lkArr = newLinks[key];
+      var n = lkArr.length;
+
+      if (!_linkLines[key]) _linkLines[key] = [];
+      var oldArr = _linkLines[key];
+
+      // Remove surplus lines if a segment now has fewer routes through it
+      while (oldArr.length > n) {
+        map.removeLayer(oldArr.pop());
+      }
+
+      lkArr.forEach(function(lk, i) {
+        var offset = (i - (n - 1) / 2) * OFFSET;
+        var pts = n > 1 ? perpOffset(lk.pts, offset) : lk.pts;
+
+        if (oldArr[i]) {
+          // Update existing — don't reset animation (avoids jolt)
+          oldArr[i].setLatLngs(pts);
+          oldArr[i].setStyle({ color: lk.color });
+        } else {
+          // New line — create and start animation
+          var line = L.polyline(pts, {
+            color: lk.color,
+            weight: 2,
+            opacity: 0.7,
+            dashArray: '10, 8'
+          }).addTo(map);
+          applyLinkAnim(line);
+          oldArr.push(line);
+        }
+      });
+    });
+
+    // Auto-fit only on the very first load (before any markers existed)
+    if (bounds.length > 0 && !_didInitialFit) {
+      _didInitialFit = true;
+      try { map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 }); } catch(e) {}
+    }
+
+    // Re-apply neighbour highlight if a node is selected (persists across refreshes)
+    if (_selectedPubkey) {
+      if (_markers[_selectedPubkey]) {
+        applyNeighbourHighlight(_selectedPubkey);
+      } else {
+        clearNeighbourSelection();
+      }
+    }
+  }
+
+  function darken(hex) {
+    // Return a slightly darker shade for marker border
+    var map = { '#4ade80': '#16a34a', '#f87171': '#dc2626', '#64748b': '#334155', '#38bdf8': '#0284c7' };
+    return map[hex] || hex;
+  }
+
+  // --- Neighbour highlight helpers ---
+
+  function clearNeighbourSelection() {
+    _selectedPubkey = null;
+    if (_neighbourLayer) _neighbourLayer.clearLayers();
+    var panel = document.getElementById('neighbourPanel');
+    if (panel) panel.style.display = 'none';
+  }
+
+  function applyNeighbourHighlight(pubkey) {
+    if (!_neighbourLayer) return;
+    _neighbourLayer.clearLayers();
+
+    var neighbours = _adjacency[pubkey] || [];
+    var selectedLatLng = _markers[pubkey] ? _markers[pubkey].getLatLng() : null;
+
+    // White halo on the selected node
+    if (selectedLatLng) {
+      L.circleMarker(selectedLatLng, {
+        radius: 16, color: '#ffffff', weight: 3,
+        fillOpacity: 0, opacity: 0.9, interactive: false
+      }).addTo(_neighbourLayer);
+    }
+
+    // Halos + lines for each neighbour
+    neighbours.forEach(function(nPk) {
+      var nLatLng = null;
+      var isUnknown = false;
+
+      if (nPk === '__home__') {
+        nLatLng = _homeMarker ? _homeMarker.getLatLng() : null;
+      } else if (_markers[nPk]) {
+        nLatLng = _markers[nPk].getLatLng();
+      } else {
+        // Unknown contact — not a configured repeater
+        var unkKey4 = nPk.length >= 4 ? nPk.substring(0, 4).toLowerCase() : null;
+        var unk = (unkKey4 && _contactMap[unkKey4] && _contactMap[unkKey4].pubkey === nPk)
+          ? _contactMap[unkKey4]
+          : _contactMap[nPk.substring(0, 2).toLowerCase()];
+        if (unk && unk.pubkey === nPk && unk.lat && unk.lon) {
+          nLatLng = [unk.lat, unk.lon];
+          isUnknown = true;
+        }
+      }
+      if (!nLatLng) return; // no GPS, skip
+
+      if (isUnknown) {
+        // Grey dashed ring for foreign/unknown mesh node
+        L.circleMarker(nLatLng, {
+          radius: 12, color: '#64748b', weight: 2,
+          fillColor: '#64748b', fillOpacity: 0.1,
+          opacity: 0.8, interactive: false,
+          dashArray: '4, 4'
+        }).addTo(_neighbourLayer);
+        // Floating name label
+        L.tooltip({ permanent: true, direction: 'top', className: 'map-label', offset: [0, -12] })
+          .setContent(_nodeNameMap[nPk] || nPk.substring(0, 8))
+          .setLatLng(nLatLng)
+          .addTo(_neighbourLayer);
+      } else {
+        // Amber halo for configured neighbour
+        L.circleMarker(nLatLng, {
+          radius: 14, color: '#f59e0b', weight: 2.5,
+          fillColor: '#f59e0b', fillOpacity: 0.15,
+          opacity: 0.9, interactive: false
+        }).addTo(_neighbourLayer);
+      }
+
+      if (selectedLatLng) {
+        L.polyline([selectedLatLng, nLatLng], {
+          color: isUnknown ? '#475569' : '#f59e0b',
+          weight: isUnknown ? 2 : 3,
+          opacity: isUnknown ? 0.6 : 0.9,
+          dashArray: isUnknown ? '6, 5' : null,
+          interactive: false
+        }).addTo(_neighbourLayer);
+      }
+    });
+
+    // Populate the info panel
+    var panel = document.getElementById('neighbourPanel');
+    var nameEl = document.getElementById('neighbourNodeName');
+    var listEl = document.getElementById('neighbourList');
+    if (!panel) return;
+
+    nameEl.textContent = _nodeNameMap[pubkey] || pubkey.substring(0, 8);
+
+    if (neighbours.length === 0) {
+      listEl.innerHTML = '<div style="color:#64748b;font-style:italic">No neighbours found</div>';
+    } else {
+      listEl.innerHTML = neighbours.map(function(nPk) {
+        var isGw = nPk === '__home__';
+        var isUnknown = !isGw && !_markers[nPk];
+        var name = _nodeNameMap[nPk] || (isGw ? 'Gateway' : nPk.substring(0, 8));
+        var dotColor = isGw ? '#38bdf8' : (isUnknown ? '#64748b' : (_nodeColors[nPk] || '#94a3b8'));
+        var cls = isGw ? ' map-neighbour-gw' : '';
+        var suffix = isUnknown ? ' <span style="color:#475569;font-size:0.7em">(unknown)</span>' : '';
+        return '<div class="map-neighbour-item">' +
+               '<span class="map-neighbour-dot" style="background:' + dotColor + '"></span>' +
+               '<span class="' + cls + '">' + name + suffix + '</span>' +
+               '</div>';
+      }).join('');
+    }
+
+    panel.style.display = 'block';
+  }
+
+  // --- Show All Contacts toggle ---
+
+  function isLinkedToMyRepeaters(pubkey) {
+    var neighbours = _adjacency[pubkey] || [];
+    for (var i = 0; i < neighbours.length; i++) {
+      if (_markers[neighbours[i]]) return true;
+    }
+    return false;
+  }
+
+  var _advertMarkers = {};  // pubkey -> { marker, label }
+
+  function renderAdvertLayer(advertNodes, repeaters) {
+    var configuredPubkeys = new Set(repeaters.map(function(r) { return r.pubkey; }));
+    var seenKeys = {};
+
+    advertNodes.forEach(function(n) {
+      if (!n.lat || !n.lon) return;
+      if (configuredPubkeys.has(n.pubkey)) return;  // already shown as a configured repeater
+      seenKeys[n.pubkey] = true;
+
+      var latlng = [n.lat, n.lon];
+      var ageMin = n.last_seen ? Math.floor((Date.now() / 1000 - n.last_seen) / 60) : null;
+      var ageTxt = ageMin !== null ? (ageMin < 60 ? ageMin + 'm ago' : Math.floor(ageMin / 60) + 'h ago') : '';
+      var popupHtml = '<div class="popup-name">' + n.name + '</div>'
+        + '<div style="color:#64748b;font-size:0.78rem">Advert-discovered' + (ageTxt ? ' \u2022 ' + ageTxt : '') + '</div>'
+        + '<div style="color:#94a3b8;font-size:0.7rem;margin-top:0.2rem;font-family:monospace">' + n.pubkey.slice(0, 16) + '\u2026</div>';
+
+      if (_advertMarkers[n.pubkey]) {
+        _advertMarkers[n.pubkey].setLatLng(latlng);
+        _advertMarkers[n.pubkey].getPopup().setContent(popupHtml);
+      } else {
+        var m = L.circleMarker(latlng, {
+          radius: 7,
+          fillColor: '#7c3aed',
+          color: '#a78bfa',
+          weight: 2,
+          opacity: 0.9,
+          fillOpacity: 0.75,
+          dashArray: '4, 3'
+        }).addTo(_advertLayer)
+          .bindPopup(popupHtml)
+          .bindTooltip(n.name + ' \u2605', { permanent: true, direction: 'top', className: 'map-label map-label-advert', offset: [0, -10] })
+          .on('click', (function(pk) {
+            return function(e) {
+              L.DomEvent.stopPropagation(e);
+              if (_highlightedRepeater === pk) {
+                _clearPathHighlight();
+              } else {
+                _pathsStateBeforeHighlight = _showingPaths;
+                _highlightedRepeater = pk;
+                if (!_showingPaths) {
+                  _showingPaths = true;
+                  document.getElementById('pathsBtn').classList.add('active');
+                }
+                renderPathsLayer();
+              }
+            };
+          })(n.pubkey));
+        _advertMarkers[n.pubkey] = m;
+      }
+    });
+
+    // Remove stale markers
+    Object.keys(_advertMarkers).forEach(function(pk) {
+      if (!seenKeys[pk]) {
+        _advertLayer.removeLayer(_advertMarkers[pk]);
+        delete _advertMarkers[pk];
+      }
+    });
+  }
+
+  function renderContactsLayer() {
+    _contactsLayer.clearLayers();
+    _allContactsData.forEach(function(c) {
+      if (c.configured) return;           // configured repeaters already have markers
+      if (!c.lat || !c.lon) return;       // no GPS, skip
+      var latlng = [c.lat, c.lon];
+      var linked = c.pubkey ? isLinkedToMyRepeaters(c.pubkey) : false;
+      // "Known" = we have a node_names cache entry for this pubkey prefix
+      var prefix2 = c.pubkey ? c.pubkey.substring(0, 2).toUpperCase() : '';
+      var isKnown = !!(prefix2 && _mapNodeNames[prefix2]);
+
+      // All contacts use the same cyan — keeps them visually distinct from configured repeaters
+      var ringColor  = '#22d3ee';
+      var fillColor  = '#0c4a6e';
+      var dashArray  = '2, 2';
+
+      // Build popup content
+      var lastHeardStr = '—';
+      if (c.last_seen) {
+        var ageSec = Date.now() / 1000 - c.last_seen;
+        if (ageSec < 60) lastHeardStr = Math.round(ageSec) + 's ago';
+        else if (ageSec < 3600) lastHeardStr = Math.round(ageSec / 60) + 'm ago';
+        else if (ageSec < 86400) lastHeardStr = Math.round(ageSec / 3600) + 'h ago';
+        else lastHeardStr = new Date(c.last_seen * 1000).toLocaleDateString();
+      }
+      var hopsStr = c.hops < 0 ? '—' : (c.hops === 0 ? 'Direct' : c.hops + ' hop' + (c.hops !== 1 ? 's' : ''));
+      var routeStr = c.route_path || '';
+      var popupContent = '<div class="popup-name">' + (c.name || c.pubkey.substring(0, 8)) + '</div>'
+        + '<div class="popup-row"><span class="popup-label">Last heard</span><span class="popup-val">' + lastHeardStr + '</span></div>'
+        + '<div class="popup-row"><span class="popup-label">Hops</span><span class="popup-val">' + hopsStr + '</span></div>'
+        + (routeStr ? '<div class="popup-row"><span class="popup-label">Path</span><span class="popup-val" style="font-size:0.78rem;font-family:monospace">' + routeStr + '</span></div>' : '')
+        + '<div class="popup-row"><span class="popup-label">ID</span><span class="popup-val" style="font-family:monospace;font-size:0.72rem">' + c.pubkey.substring(0, 12) + '…</span></div>'
+        + (isKnown ? '<div style="color:#22d3ee;font-size:0.7rem;margin-top:0.2rem">★ Known node</div>' : '')
+        + (linked ? '<div style="color:#f59e0b;font-size:0.7rem;margin-top:0.2rem">⬡ Linked to your mesh</div>' : '');
+
+      var cm = L.circleMarker(latlng, {
+        radius: 7,
+        color: ringColor,
+        weight: linked ? 2 : 1.5,
+        fillColor: fillColor,
+        fillOpacity: 0.75,
+        opacity: 0.9,
+        dashArray: dashArray
+      }).bindPopup(popupContent).addTo(_contactsLayer)
+        .on('click', (function(pk) {
+          return function(e) {
+            L.DomEvent.stopPropagation(e);
+            if (_highlightedRepeater === pk) {
+              _clearPathHighlight();
+            } else {
+              _pathsStateBeforeHighlight = _showingPaths;
+              _highlightedRepeater = pk;
+              if (!_showingPaths) {
+                _showingPaths = true;
+                document.getElementById('pathsBtn').classList.add('active');
+              }
+              renderPathsLayer();
+            }
+          };
+        })(c.pubkey));
+
+      // Label shows name; append which repeater(s) it connects through
+      var label = c.name || c.pubkey.substring(0, 8);
+      if (linked) {
+        var linkedNames = (_adjacency[c.pubkey] || [])
+          .filter(function(nPk) { return !!_markers[nPk]; })
+          .map(function(nPk) { return _nodeNameMap[nPk] || nPk.substring(0, 6); });
+        if (linkedNames.length) label += ' \u2192 ' + linkedNames.join(', ');
+      }
+
+      cm.bindTooltip(label, { permanent: true, direction: 'top', className: 'map-label', offset: [0, -10] });
+    });
+  }
+
+  // --- Paths layer ---
+
+  function rebuildAllNodeLatLng(data) {
+    _allNodeLatLng = {};
+    // Home node — keyed as '__home__'
+    var home = data.home || {};
+    if (home.lat && home.lon) {
+      _allNodeLatLng['__home__'] = { lat: home.lat, lon: home.lon, name: home.name || 'Gateway' };
+    }
+    // Configured repeaters
+    (data.repeaters || []).forEach(function(r) {
+      if (!r.lat || !r.lon || !r.pubkey) return;
+      var prefix = r.pubkey.substring(0, 2).toLowerCase();
+      _allNodeLatLng[prefix] = { lat: r.lat, lon: r.lon, name: r.name || prefix };
+    });
+    // All contacts (includes non-configured ones)
+    (data.contacts || []).forEach(function(c) {
+      if (!c.lat || !c.lon || !c.pubkey) return;
+      var prefix = c.pubkey.substring(0, 2).toLowerCase();
+      if (!_allNodeLatLng[prefix]) {
+        _allNodeLatLng[prefix] = { lat: c.lat, lon: c.lon, name: c.name || prefix };
+      }
+    });
+    // Advert-discovered nodes (may have GPS decoded from beacon payload)
+    (data.advert_nodes || []).forEach(function(n) {
+      if (!n.lat || !n.lon || !n.pubkey) return;
+      var prefix = n.pubkey.substring(0, 2).toLowerCase();
+      if (!_allNodeLatLng[prefix]) {
+        _allNodeLatLng[prefix] = { lat: n.lat, lon: n.lon, name: n.name || prefix };
+      }
+    });
+  }
+
+  function _clearPathHighlight() {
+    _highlightedRepeater = null;
+    var wasOn = _pathsStateBeforeHighlight;
+    _showingPaths = wasOn;
+    var btn = document.getElementById('pathsBtn');
+    if (wasOn) {
+      btn.classList.add('active');
+      renderPathsLayer();
+    } else {
+      btn.classList.remove('active');
+      _pathsLayer.clearLayers();
+    }
+  }
+
+  function togglePaths() {
+    _highlightedRepeater = null;  // clear any highlight when manually toggling
+    _showingPaths = !_showingPaths;
+    var btn = document.getElementById('pathsBtn');
+    if (_showingPaths) {
+      btn.classList.add('active');
+      renderPathsLayer();
+    } else {
+      btn.classList.remove('active');
+      _pathsLayer.clearLayers();
+    }
+  }
+
+  function _haversineKm(a, b) {
+    var R = 6371;
+    var dLat = (b[0] - a[0]) * Math.PI / 180;
+    var dLon = (b[1] - a[1]) * Math.PI / 180;
+    var sinLat = Math.sin(dLat / 2), sinLon = Math.sin(dLon / 2);
+    var h = sinLat * sinLat + Math.cos(a[0] * Math.PI / 180) * Math.cos(b[0] * Math.PI / 180) * sinLon * sinLon;
+    return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  }
+
+  function _addPathToSegments(latlngs, label, segCounts, segLatLng, segLabels) {
+    if (latlngs.length < 2) return;
+    for (var i = 0; i < latlngs.length - 1; i++) {
+      var a = latlngs[i], b = latlngs[i + 1];
+      if (_haversineKm(a, b) > 300) continue;  // skip unrealistic direct hops
+      var ka = a[0] + ',' + a[1], kb = b[0] + ',' + b[1];
+      var key = ka < kb ? (ka + '|' + kb) : (kb + '|' + ka);
+      if (!segCounts[key]) {
+        segCounts[key] = 0;
+        segLatLng[key] = [a, b];
+        segLabels[key] = [];
+      }
+      segCounts[key]++;
+      if (segLabels[key].indexOf(label) === -1) segLabels[key].push(label);
+    }
+  }
+
+  function _pathInvolvesRepeater(destPubkey, routePath, filterPk) {
+    var fp = filterPk.substring(0, 2).toLowerCase();
+    if (destPubkey && destPubkey.substring(0, 2).toLowerCase() === fp) return true;
+    if (routePath) {
+      var segs = routePath.replace(/\s/g, '').split('>');
+      for (var i = 0; i < segs.length; i++) {
+        if (segs[i].toLowerCase() === fp) return true;
+      }
+    }
+    return false;
+  }
+
+  function renderPathsLayer() {
+    _pathsLayer.clearLayers();
+    fetch('/api/contact-routes')
+      .then(function(r) { return r.json(); })
+      .then(function(routes) {
+        var homeNode = _allNodeLatLng['__home__'];
+        var filterPk = _highlightedRepeater;  // null = show all
+
+        var segCounts = {};
+        var segLatLng = {};
+        var segLabels = {};
+
+        // Build set of our configured repeater 2-char prefixes (to skip in Source 2)
+        var myPrefixes = {};
+        if (_lastMapData) {
+          (_lastMapData.repeaters || []).forEach(function(r) {
+            if (r.pubkey && r.pubkey.length >= 2) myPrefixes[r.pubkey.substring(0, 2).toLowerCase()] = true;
+          });
+        }
+
+        // --- Source 1: configured repeaters from last /api/map response ---
+        if (_lastMapData) {
+          (_lastMapData.repeaters || []).forEach(function(r) {
+            if (!r.lat || !r.lon) return;
+            var rHops = r.hops >= 0 ? r.hops : 0;
+            // Multi-hop with no path info — don't draw a misleading straight line
+            if (rHops > 0 && !r.route_path) return;
+            if (filterPk && !_pathInvolvesRepeater(r.pubkey, r.route_path || '', filterPk)) return;
+            var latlngs = [];
+            if (homeNode) latlngs.push([homeNode.lat, homeNode.lon]);
+            if (r.route_path) {
+              r.route_path.replace(/\s/g, '').split('>').forEach(function(seg) {
+                var node = _allNodeLatLng[seg.toLowerCase()];
+                if (node) latlngs.push([node.lat, node.lon]);
+              });
+            }
+            latlngs.push([r.lat, r.lon]);
+            // Multi-hop but no intermediate GPS resolved — still a straight line, skip it
+            if (rHops > 0 && latlngs.length < 3) return;
+            _addPathToSegments(latlngs, r.name + ' (' + rHops + ' hop' + (rHops !== 1 ? 's' : '') + ')',
+              segCounts, segLatLng, segLabels);
+          });
+        }
+
+        // --- Source 2: contact-routes (discovered via PATH_RESPONSE / adverts) ---
+        Object.keys(routes).forEach(function(prefix) {
+          var entry = routes[prefix];
+          // Keys can be 2 or 4 chars (uppercase) — always look up by first 2 chars
+          var pre2 = prefix.substring(0, 2).toLowerCase();
+          // Skip destinations that are our own configured repeaters (Source 1 handles them)
+          if (myPrefixes[pre2]) return;
+          var dest = _allNodeLatLng[pre2];
+          if (!dest) return;
+          if (filterPk && !_pathInvolvesRepeater(prefix, entry.path || '', filterPk)) return;
+
+          var latlngs = [];
+          if (homeNode) latlngs.push([homeNode.lat, homeNode.lon]);
+
+          var pathStr = entry.path || '';
+          if (pathStr) {
+            pathStr.replace(/\s/g, '').split('>').forEach(function(seg) {
+              var node = _allNodeLatLng[seg.toLowerCase()];
+              if (node) latlngs.push([node.lat, node.lon]);
+            });
+          }
+          latlngs.push([dest.lat, dest.lon]);
+          var hops = entry.hops >= 0 ? entry.hops : 0;
+          // Multi-hop but no intermediates resolved — skip rather than draw straight line
+          if (hops > 0 && latlngs.length < 3) return;
+          if (latlngs.length < 2) return;
+
+          var nodeName = dest.name || prefix.substring(0, 2).toUpperCase();
+          var label = nodeName + ' (' + hops + ' hop' + (hops !== 1 ? 's' : '') + ')';
+          _addPathToSegments(latlngs, label, segCounts, segLatLng, segLabels);
+        });
+
+        // Second pass: draw each unique segment once — colour shows shared vs single
+        Object.keys(segCounts).forEach(function(key) {
+          var count = segCounts[key];
+          var latlngs = segLatLng[key];
+          // Single route: teal dashed; shared by 2+: amber solid
+          var color = count > 1 ? '#f59e0b' : '#34d399';
+          var tip = segLabels[key].join(', ');
+          var line = L.polyline(latlngs, {
+            color: color,
+            weight: 2,
+            opacity: 0.75,
+            dashArray: count > 1 ? null : '6 4'
+          });
+          line.bindTooltip(count + ' path' + (count !== 1 ? 's' : '') + ': ' + tip,
+            { sticky: true, className: 'map-label' });
+          _pathsLayer.addLayer(line);
+        });
+      })
+      .catch(function() {});
+  }
+
+  function toggleAllContacts() {
+    _showingAllContacts = !_showingAllContacts;
+    var btn = document.getElementById('contactsBtn');
+    if (_showingAllContacts) {
+      btn.classList.add('active');
+      renderContactsLayer();
+    } else {
+      btn.classList.remove('active');
+      _contactsLayer.clearLayers();
+    }
+  }
+
+  // --- Set Home pick mode ---
+  var _pickingHome = false;
+
+  function togglePickHome() {
+    _pickingHome = !_pickingHome;
+    var btn = document.getElementById('setHomeBtn');
+    var mapEl = document.getElementById('leaflet-map');
+    if (_pickingHome) {
+      btn.classList.add('picking');
+      btn.textContent = '\u2715 Cancel';
+      mapEl.classList.add('map-picking');
+    } else {
+      btn.classList.remove('picking');
+      btn.textContent = '\u8962 Set Home';
+      mapEl.classList.remove('map-picking');
+    }
+  }
+
+  map.on('click', function(e) {
+    if (!_pickingHome) {
+      clearNeighbourSelection();
+      if (_highlightedRepeater) _clearPathHighlight();
+      return;
+    }
+    var lat = e.latlng.lat;
+    var lon = e.latlng.lng;
+    fetch('/api/home', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat: lat, lon: lon })
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(result) {
+        if (result.ok) {
+          _pickingHome = false;
+          var btn = document.getElementById('setHomeBtn');
+          btn.classList.remove('picking');
+          btn.textContent = '\u8962 Set Home';
+          document.getElementById('leaflet-map').classList.remove('map-picking');
+          loadMap();
+        }
+      })
+      .catch(function() {});
+  });
+
+  // Initial load + auto-refresh every 10s
+  loadNodeNames();
+  loadMap();
+  setInterval(loadMap, 10000);
+  setInterval(loadNodeNames, 30000);
+</script>
+</body>
+</html>

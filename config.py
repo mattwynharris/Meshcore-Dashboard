@@ -20,11 +20,18 @@ _DEFAULTS = {
     "repeaters": [
         # {"name": "Repeater 1", "pubkey": "PASTE_PUBKEY_HERE"},
     ],
-    "poll_interval_seconds": 120,
-    "stagger_delay_seconds": 15,
+    "poll_interval_seconds": 3600,
+    "stagger_delay_seconds": 30,
     "stale_threshold_seconds": 900,
     "low_battery_percent": 20,
     "log_retention_hours": 24,
+    "channels": [
+        {"name": "Primary", "idx": 0},
+    ],
+    "ntfy_topic": "",
+    "ntfy_server": "https://ntfy.sh",
+    "ntfy_enabled": True,
+    "dashboard_url": "",
 }
 
 # --- History (not editable from web UI) ---
@@ -83,6 +90,9 @@ def get_low_battery_percent() -> int:
 
 def get_log_retention_hours() -> int:
     return _load_settings().get("log_retention_hours", 24)
+
+def get_channels() -> list:
+    return _load_settings().get("channels", [{"name": "Primary", "idx": 0}])
 
 
 # Backwards-compatible constants (used by data_store.py at import time)

@@ -15,3 +15,12 @@ services:
       - ./templates:/app/templates
       - ./static:/app/static
     restart: unless-stopped
+
+  ntfy:
+    image: binwiederhier/ntfy
+    command: serve
+    ports:
+      - "2586:80"
+    volumes:
+      - ./data/ntfy:/var/cache/ntfy
+    restart: unless-stopped

@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recent Packets - MeshCore Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .packets-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 0 1.25rem;
+      border-bottom: 1px solid #1e293b;
+      margin-bottom: 1.5rem;
+      max-width: 1200px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .back-btn {
+      background: none;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      font-family: inherit;
+      text-decoration: none;
+      transition: color 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+    .back-btn:hover { color: #38bdf8; border-color: #38bdf8; }
+    .packets-title { font-size: 1.3rem; font-weight: 700; color: #38bdf8; }
+    .packets-subtitle { font-size: 0.8rem; color: #64748b; margin-left: auto; }
+
+    .packets-body {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .packets-toolbar {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .filter-pill {
+      background: none;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 20px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .filter-pill.active { color: #38bdf8; border-color: #38bdf8; background: rgba(56,189,248,0.08); }
+    .filter-pill:hover:not(.active) { color: #cbd5e1; border-color: #475569; }
+
+    .pkt-search {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      font-size: 0.78rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 20px;
+      font-family: inherit;
+      width: 140px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .pkt-search:focus { border-color: #38bdf8; }
+    .pkt-search::placeholder { color: #475569; }
+
+    .time-select {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 20px;
+      font-family: inherit;
+      outline: none;
+      cursor: pointer;
+    }
+    .time-select:focus { border-color: #38bdf8; }
+
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.72rem;
+      color: #22c55e;
+      margin-left: auto;
+    }
+    .live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+      animation: pulse-dot 1.8s infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .paused-badge { color: #64748b; }
+    .paused-badge .live-dot { background: #64748b; animation: none; }
+
+    .packets-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .packet-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 0.6rem 0.85rem;
+      font-size: 0.82rem;
+      transition: border-color 0.2s;
+    }
+    .packet-row:hover { border-color: #334155; }
+    .packet-row.new-flash {
+      animation: row-flash 0.6s ease-out;
+    }
+    @keyframes row-flash {
+      0% { background: #1e293b; }
+      100% { background: #0f172a; }
+    }
+
+    .pkt-time {
+      color: #475569;
+      font-size: 0.72rem;
+      white-space: nowrap;
+      min-width: 5.5rem;
+      padding-top: 0.1rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .pkt-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      white-space: nowrap;
+      min-width: 4.5rem;
+      text-align: center;
+    }
+    .badge-contact_msg  { background: #1e3a5f; color: #60a5fa; }
+    .badge-channel_msg  { background: #1c3a2e; color: #4ade80; }
+    .badge-ack          { background: #1e2d1e; color: #86efac; }
+    .badge-path         { background: #2d1e3a; color: #c084fc; }
+    .badge-rx           { background: #1e2a3a; color: #94a3b8; }
+    .badge-rx-request   { background: #1a2a1a; color: #86efac; }
+    .badge-rx-advert    { background: #2a1e1e; color: #f97316; }
+    .badge-rx-grouptext { background: #1c3a2e; color: #4ade80; }
+    .badge-rx-response  { background: #1e2a3a; color: #7dd3fc; }
+    .badge-rx-path      { background: #2d1e3a; color: #c084fc; }
+    .badge-rx-anon      { background: #2a1a2a; color: #f472b6; }
+    .badge-rx-textmsg   { background: #1e3a5f; color: #93c5fd; }
+    .badge-advert_sent  { background: #1a2a1a; color: #4ade80; }
+
+    .pkt-body { flex: 1; color: #cbd5e1; line-height: 1.45; }
+    .pkt-meta { font-size: 0.72rem; color: #64748b; margin-top: 0.2rem; }
+    .pkt-text { color: #e2e8f0; }
+
+    .pkt-path {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.2rem;
+      margin-top: 0.25rem;
+    }
+    .path-chip {
+      font-family: monospace;
+      font-size: 0.68rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      padding: 0.05rem 0.4rem;
+      border-radius: 4px;
+      cursor: default;
+      position: relative;
+    }
+    .path-chip-named {
+      border-color: #38bdf8;
+      color: #7dd3fc;
+    }
+    /* Tooltip showing name on hover */
+    .path-chip[title]:hover::after {
+      content: attr(title);
+      position: absolute;
+      bottom: calc(100% + 4px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      font-size: 0.7rem;
+      font-family: inherit;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .path-arrow {
+      font-size: 0.68rem;
+      color: #475569;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: #475569;
+      padding: 3rem 1rem;
+      font-size: 0.9rem;
+    }
+
+    /* Raw toggle */
+    .raw-toggle-btn {
+      background: none;
+      border: 1px solid #334155;
+      color: #64748b;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: monospace;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .raw-toggle-btn.active { color: #fbbf24; border-color: #fbbf24; background: rgba(251,191,36,0.08); }
+    .raw-toggle-btn:hover:not(.active) { color: #cbd5e1; border-color: #475569; }
+
+    .pkt-hex-seg {
+      font-family: monospace;
+      font-size: 0.68rem;
+      word-break: break-all;
+      margin-top: 0.3rem;
+      line-height: 1.9;
+    }
+    .hex-seg { border-radius: 3px; padding: 0 2px; cursor: help; }
+    .hex-header        { color: #fbbf24; background: rgba(251,191,36,0.12); }
+    .hex-pathlen       { color: #64748b; background: rgba(100,116,139,0.15); }
+    .hex-hop           { color: #94a3b8; background: rgba(148,163,184,0.1); }
+    .hex-hop-named     { color: #7dd3fc; background: rgba(125,211,252,0.12); }
+    .hex-payload       { color: #475569; }
+    .hex-payload-key   { color: #f97316; background: rgba(249,115,22,0.1); }
+    .hex-payload-ts    { color: #64748b; background: rgba(100,116,139,0.1); }
+    .hex-payload-sig   { color: #1e3a5a; background: rgba(30,58,90,0.3); }
+    .hex-payload-flags { color: #94a3b8; }
+    .hex-payload-coord { color: #4ade80; background: rgba(74,222,128,0.08); }
+    .hex-payload-name  {
+      color: #22c55e; background: rgba(34,197,94,0.15);
+      cursor: pointer; text-decoration: underline dotted;
+    }
+    .hex-payload-name:hover { background: rgba(34,197,94,0.28); }
+    .hex-ellipsis      { color: #334155; }
+    .hex-decoded-label {
+      display: inline-block;
+      color: #22c55e; font-style: italic;
+      background: rgba(34,197,94,0.1);
+      border-radius: 3px; padding: 0 4px;
+      margin-left: 4px; font-family: inherit;
+    }
+
+    /* Decoded advert info block */
+    .advert-decoded {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.1rem 0.6rem;
+      font-size: 0.7rem;
+      margin-top: 0.35rem;
+      padding: 0.35rem 0.6rem;
+      background: rgba(249,115,22,0.05);
+      border-left: 2px solid rgba(249,115,22,0.3);
+      border-radius: 0 4px 4px 0;
+    }
+    .advert-decoded-key { color: #64748b; white-space: nowrap; }
+    .advert-decoded-val { color: #cbd5e1; font-family: monospace; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <div class="packets-header">
+    <a href="/" class="back-btn">&#8592; Dashboard</a>
+    <div class="packets-title">Recent Packets</div>
+    <div class="packets-subtitle" id="packetCount"></div>
+  </div>
+
+  <div class="packets-body">
+    <div class="packets-toolbar">
+      <button class="filter-pill active" data-type="all" onclick="setFilter('all', this)">All</button>
+      <button class="filter-pill" data-type="contact_msg" onclick="setFilter('contact_msg', this)">Direct Msgs</button>
+      <button class="filter-pill" data-type="channel_msg" onclick="setFilter('channel_msg', this)">Channel Msgs</button>
+      <button class="filter-pill" data-type="ack" onclick="setFilter('ack', this)">ACKs</button>
+      <button class="filter-pill" data-type="path" onclick="setFilter('path', this)">Path Updates</button>
+      <button class="filter-pill" data-type="rx" onclick="setFilter('rx', this)">RF Packets</button>
+      <button class="filter-pill" data-type="request_rx" onclick="setFilter('request_rx', this)">Requests</button>
+      <button class="filter-pill" data-type="textmsg_rx" onclick="setFilter('textmsg_rx', this)">Text Msgs</button>
+      <button class="filter-pill" data-type="advert" onclick="setFilter('advert', this)">Adverts</button>
+      <button class="filter-pill" data-type="direct_rx" onclick="setFilter('direct_rx', this)">Direct</button>
+      <select class="time-select" id="timeWindow" onchange="renderList()" title="Show events from last…">
+        <option value="0">All time</option>
+        <option value="15">Last 15 min</option>
+        <option value="60">Last 1 hour</option>
+        <option value="360">Last 6 hours</option>
+      </select>
+      <input class="pkt-search" id="pktSearch" type="search" placeholder="Search…" oninput="renderList()">
+      <button class="raw-toggle-btn" id="rawToggleBtn" onclick="toggleRaw()" title="Toggle raw hex view">RAW</button>
+      <span class="live-badge" id="liveBadge">
+        <span class="live-dot"></span> Live
+      </span>
+    </div>
+
+    <div class="packets-list" id="packetsList">
+      <div class="empty-state" id="emptyState">Waiting for mesh activity…</div>
+    </div>
+  </div>
+
+  <script>
+    var _filter = 'all';
+    var _rawMode = false;
+    var _events = [];
+    var _knownIds = new Set();
+    var _paused = false;
+    var _refreshInterval = null;
+
+    function setFilter(type, btn) {
+      _filter = type;
+      document.querySelectorAll('.filter-pill').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      renderList();
+    }
+
+    function toggleRaw() {
+      _rawMode = !_rawMode;
+      var btn = document.getElementById('rawToggleBtn');
+      btn.classList.toggle('active', _rawMode);
+      renderList();
+    }
+
+    function fmtTime(ts) {
+      var d = new Date(ts * 1000);
+      var h = String(d.getHours()).padStart(2, '0');
+      var m = String(d.getMinutes()).padStart(2, '0');
+      var s = String(d.getSeconds()).padStart(2, '0');
+      return h + ':' + m + ':' + s;
+    }
+
+    function buildPathChips(chips, fallbackPath) {
+      var pathDiv = document.createElement('div');
+      pathDiv.className = 'pkt-path';
+      var items = chips && chips.length ? chips : null;
+      // Fallback: parse raw path string if no chips available
+      if (!items && fallbackPath) {
+        items = fallbackPath.split('>').map(function(s) {
+          s = s.trim();
+          return { id: s, name: s };
+        });
+      }
+      if (!items || !items.length) return pathDiv;
+      items.forEach(function(hop, i) {
+        if (i > 0) {
+          var arr = document.createElement('span');
+          arr.className = 'path-arrow';
+          arr.textContent = '\u2192';
+          pathDiv.appendChild(arr);
+        }
+        var chip = document.createElement('span');
+        var isNamed = hop.name && hop.name !== hop.id;
+        chip.className = 'path-chip' + (isNamed ? ' path-chip-named' : '');
+        chip.textContent = hop.id;
+        if (isNamed) chip.title = hop.name;
+        pathDiv.appendChild(chip);
+      });
+      var tail = document.createElement('span');
+      tail.className = 'path-arrow';
+      tail.textContent = '\u2192 [You]';
+      pathDiv.appendChild(tail);
+      return pathDiv;
+    }
+
+    function buildHexSegments(evt) {
+      var raw = evt.raw || '';
+      var container = document.createElement('div');
+      container.className = 'pkt-hex-seg';
+
+      function addSpan(hexStr, cls, tip, clickLabel) {
+        if (!hexStr) return;
+        var span = document.createElement('span');
+        span.className = 'hex-seg ' + cls;
+        span.textContent = hexStr;
+        if (tip) span.title = tip;
+        if (clickLabel) {
+          span.dataset.decoded = clickLabel;
+          span.onclick = function() {
+            var existing = container.querySelector('.hex-decoded-label');
+            if (existing) { existing.remove(); return; }
+            var lbl = document.createElement('span');
+            lbl.className = 'hex-decoded-label';
+            lbl.textContent = clickLabel;
+            span.insertAdjacentElement('afterend', lbl);
+          };
+        }
+        container.appendChild(span);
+        container.appendChild(document.createTextNode('\u202f'));
+      }
+
+      if (raw.length < 4) { container.textContent = raw; return container; }
+
+      var header = parseInt(raw.slice(0, 2), 16);
+      var routeType = header & 0x03;
+      var payloadType = (header >> 2) & 0x0F;
+      var routeNames = ['Direct', 'Flood', 'Routed', 'Reply'];
+      addSpan(raw.slice(0, 2), 'hex-header',
+        'Header \u2022 ' + routeNames[routeType] + ' route \u2022 payload type ' + payloadType);
+
+      var pathLen = parseInt(raw.slice(2, 4), 16);
+      addSpan(raw.slice(2, 4), 'hex-pathlen', 'Path length: ' + pathLen + ' hop' + (pathLen !== 1 ? 's' : ''));
+
+      var pathArr = evt.path || [];
+      for (var i = 0; i < pathLen; i++) {
+        var hp = 4 + i * 2;
+        if (hp + 2 > raw.length) break;
+        var hopHex = raw.slice(hp, hp + 2);
+        var hopInfo = pathArr[i];
+        var hopName = hopInfo && hopInfo.name !== hopInfo.id ? hopInfo.name : '';
+        addSpan(hopHex, hopName ? 'hex-hop hex-hop-named' : 'hex-hop',
+          hopName ? hopHex + ' \u2192 ' + hopName : 'Hop ' + (i + 1) + ': ' + hopHex);
+      }
+
+      var plStart = 4 + pathLen * 2;
+      var pl = raw.slice(plStart);
+
+      if (payloadType === 4 && pl.length >= 218) {
+        // Advert: pubkey(64) ts(8) sig(128) flags(2) lat(8) lon(8) name(rest)
+        addSpan(pl.slice(0, 64),   'hex-payload-key',   'Public key (32 bytes)');
+        addSpan(pl.slice(64, 72),  'hex-payload-ts',    'Timestamp (4 bytes)');
+        addSpan(pl.slice(72, 200), 'hex-payload-sig',   'Signature (64 bytes)');
+        addSpan(pl.slice(200, 202),'hex-payload-flags', 'App flags');
+        addSpan(pl.slice(202, 210),'hex-payload-coord', 'Latitude');
+        addSpan(pl.slice(210, 218),'hex-payload-coord', 'Longitude');
+        var nameHex = pl.slice(218);
+        if (nameHex) {
+          var nodeName = evt.node || '?';
+          addSpan(nameHex, 'hex-payload-name',
+            'Node name \u2022 click to reveal', nodeName);
+        }
+      } else {
+        addSpan(pl, 'hex-payload', 'Payload (' + Math.floor(pl.length / 2) + ' bytes)');
+      }
+
+      return container;
+    }
+
+    var _RX_BADGE = {
+      'Request':      { cls: 'badge-rx-request',    label: 'Request' },
+      'Advert':       { cls: 'badge-rx-advert',     label: 'Advert' },
+      'Group Text':   { cls: 'badge-rx-grouptext',  label: 'Group Text' },
+      'Response':     { cls: 'badge-rx-response',   label: 'Response' },
+      'Path Update':  { cls: 'badge-rx-path',       label: 'Path' },
+      'Anon Request': { cls: 'badge-rx-anon',       label: 'Anon' },
+      'Text Msg':     { cls: 'badge-rx-textmsg',    label: 'Text Msg' },
+    };
+
+    function badgeLabel(type) {
+      switch (type) {
+        case 'contact_msg': return 'Direct';
+        case 'channel_msg': return 'Channel';
+        case 'ack':         return 'ACK';
+        case 'path':        return 'Path';
+        case 'rx':          return 'RF';
+        case 'advert_sent': return 'Advert \u2191';
+        default:            return type;
+      }
+    }
+
+    function matchesFilter(evt) {
+      // Time window filter
+      var windowSel = document.getElementById('timeWindow');
+      var windowMins = windowSel ? parseInt(windowSel.value) : 0;
+      if (windowMins > 0) {
+        var cutoff = Date.now() / 1000 - windowMins * 60;
+        if (evt.ts < cutoff) return false;
+      }
+
+      // Type filter
+      var typeOk = false;
+      if (_filter === 'all') {
+        typeOk = true;
+      } else if (_filter === 'advert') {
+        typeOk = (evt.type === 'rx' && evt.pkt_type === 'Advert') || evt.type === 'advert_sent';
+      } else if (_filter === 'request_rx') {
+        typeOk = evt.type === 'rx' && evt.pkt_type === 'Request';
+      } else if (_filter === 'textmsg_rx') {
+        typeOk = evt.type === 'rx' && evt.pkt_type === 'Text Msg';
+      } else if (_filter === 'direct_rx') {
+        typeOk = evt.type === 'rx' && evt.direct === true;
+      } else {
+        typeOk = evt.type === _filter;
+      }
+      if (!typeOk) return false;
+
+      // Text search
+      var searchEl = document.getElementById('pktSearch');
+      var term = searchEl ? searchEl.value.trim().toLowerCase() : '';
+      if (term) {
+        var haystack = [
+          evt.type, evt.pkt_type, evt.sender, evt.text,
+          evt.channel, evt.name, evt.node, evt.route, evt.raw
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (haystack.indexOf(term) === -1) return false;
+      }
+
+      return true;
+    }
+
+    function buildRow(evt, isNew) {
+      var row = document.createElement('div');
+      row.className = 'packet-row' + (isNew ? ' new-flash' : '');
+
+      var time = document.createElement('div');
+      time.className = 'pkt-time';
+      time.textContent = fmtTime(evt.ts);
+      row.appendChild(time);
+
+      var badge = document.createElement('span');
+      if (evt.type === 'rx' && evt.pkt_type && _RX_BADGE[evt.pkt_type]) {
+        var rxb = _RX_BADGE[evt.pkt_type];
+        badge.className = 'pkt-badge ' + rxb.cls;
+        badge.textContent = rxb.label;
+      } else {
+        badge.className = 'pkt-badge badge-' + evt.type;
+        badge.textContent = badgeLabel(evt.type);
+      }
+      row.appendChild(badge);
+
+      var body = document.createElement('div');
+      body.className = 'pkt-body';
+
+      if (evt.type === 'contact_msg') {
+        var sender = document.createElement('div');
+        sender.className = 'pkt-text';
+        sender.textContent = '\u2192 ' + (evt.sender || 'Unknown');
+        body.appendChild(sender);
+        if (evt.text) {
+          var txt = document.createElement('div');
+          txt.style.color = '#94a3b8';
+          txt.textContent = evt.text;
+          body.appendChild(txt);
+        }
+        var meta = document.createElement('div');
+        meta.className = 'pkt-meta';
+        var hopStr = evt.hops >= 0 ? evt.hops + ' hop' + (evt.hops !== 1 ? 's' : '') : '? hops';
+        meta.textContent = hopStr;
+        body.appendChild(meta);
+
+      } else if (evt.type === 'channel_msg') {
+        var sender = document.createElement('div');
+        sender.className = 'pkt-text';
+        sender.textContent = (evt.channel || 'Ch?') + '  \u2022  ' + (evt.sender || 'Unknown');
+        body.appendChild(sender);
+        if (evt.text) {
+          var txt = document.createElement('div');
+          txt.style.color = '#94a3b8';
+          txt.textContent = evt.text;
+          body.appendChild(txt);
+        }
+        var meta = document.createElement('div');
+        meta.className = 'pkt-meta';
+        var hopStr = evt.hops >= 0 ? evt.hops + ' hop' + (evt.hops !== 1 ? 's' : '') : '? hops';
+        meta.textContent = hopStr;
+        body.appendChild(meta);
+
+      } else if (evt.type === 'ack') {
+        var main = document.createElement('div');
+        main.className = 'pkt-text';
+        main.textContent = 'Message confirmed seen by ' + (evt.seen_by || 1) + ' node' + (evt.seen_by !== 1 ? 's' : '');
+        body.appendChild(main);
+        if (evt.ack_code) {
+          var meta = document.createElement('div');
+          meta.className = 'pkt-meta';
+          meta.textContent = 'code: ' + evt.ack_code;
+          body.appendChild(meta);
+        }
+
+      } else if (evt.type === 'path') {
+        var main = document.createElement('div');
+        main.className = 'pkt-text';
+        main.textContent = (evt.name || evt.pubkey || '?') + '  \u2014  ' + (evt.hops >= 0 ? evt.hops + ' hop' + (evt.hops !== 1 ? 's' : '') : '? hops');
+        body.appendChild(main);
+        if (evt.route) {
+          var meta = document.createElement('div');
+          meta.className = 'pkt-meta';
+          meta.textContent = evt.route;
+          body.appendChild(meta);
+        }
+
+      } else if (evt.type === 'rx') {
+        var main = document.createElement('div');
+        main.className = 'pkt-text';
+        var typeLabel = (evt.pkt_type !== undefined && evt.pkt_type !== '') ? evt.pkt_type : 'RF Packet';
+        var mainText = typeLabel;
+        if (evt.node) mainText += '  \u2022  ' + evt.node;
+        main.textContent = mainText;
+        body.appendChild(main);
+
+        if (evt.path && evt.path.length > 0) {
+          var pathDiv = document.createElement('div');
+          pathDiv.className = 'pkt-path';
+          evt.path.forEach(function(hop, i) {
+            if (i > 0) {
+              var arr = document.createElement('span');
+              arr.className = 'path-arrow';
+              arr.textContent = '\u2192';
+              pathDiv.appendChild(arr);
+            }
+            var chip = document.createElement('span');
+            var isNamed = hop.name && hop.name !== hop.id;
+            // Always show hex ID on chip; put name in tooltip if known
+            chip.className = 'path-chip' + (isNamed ? ' path-chip-named' : '');
+            chip.textContent = hop.id;
+            if (isNamed) chip.title = hop.name;
+            pathDiv.appendChild(chip);
+          });
+          var tail = document.createElement('span');
+          tail.className = 'path-arrow';
+          tail.textContent = '\u2192 [You]';
+          pathDiv.appendChild(tail);
+          body.appendChild(pathDiv);
+        }
+
+        var meta = document.createElement('div');
+        meta.className = 'pkt-meta';
+        var parts = [];
+        if (evt.snr != null) parts.push('SNR ' + evt.snr + ' dB');
+        if (evt.rssi != null) parts.push('RSSI ' + evt.rssi + ' dBm');
+        meta.textContent = parts.join('  \u2022  ');
+        body.appendChild(meta);
+
+        // Decoded advert info block
+        if (evt.pkt_type === 'Advert' && evt.advert) {
+          var ad = evt.advert;
+          var adDiv = document.createElement('div');
+          adDiv.className = 'advert-decoded';
+          function adRow(k, v) {
+            if (v == null || v === '' || v === '?') return;
+            var kEl = document.createElement('span'); kEl.className = 'advert-decoded-key'; kEl.textContent = k;
+            var vEl = document.createElement('span'); vEl.className = 'advert-decoded-val'; vEl.textContent = v;
+            adDiv.appendChild(kEl); adDiv.appendChild(vEl);
+          }
+          if (ad.name) adRow('Name', ad.name);
+          if (ad.pubkey) adRow('Pubkey', ad.pubkey.slice(0, 16) + '\u2026');
+          if (ad.ts) {
+            var d = new Date(ad.ts * 1000);
+            adRow('Timestamp', d.toLocaleString());
+          }
+          if (ad.flags != null) adRow('App flags', '0x' + ad.flags.toString(16).toUpperCase().padStart(2, '0'));
+          if (ad.lat != null && ad.lon != null && (ad.lat !== 0 || ad.lon !== 0)) {
+            adRow('Latitude', ad.lat.toFixed(6) + '\u00b0');
+            adRow('Longitude', ad.lon.toFixed(6) + '\u00b0');
+          }
+          if (adDiv.children.length > 0) body.appendChild(adDiv);
+        }
+
+        if (evt.raw) {
+          if (_rawMode) {
+            var rawDiv = document.createElement('div');
+            rawDiv.className = 'pkt-hex-seg';
+            rawDiv.style.color = '#64748b';
+            rawDiv.textContent = evt.raw;
+            body.appendChild(rawDiv);
+          } else {
+            body.appendChild(buildHexSegments(evt));
+          }
+        }
+
+      } else if (evt.type === 'advert_sent') {
+        var main = document.createElement('div');
+        main.className = 'pkt-text';
+        main.textContent = 'Sent floodadv \u2192 ' + (evt.name || evt.pubkey || '?');
+        body.appendChild(main);
+        var meta = document.createElement('div');
+        meta.className = 'pkt-meta';
+        meta.textContent = 'Repeater commanded to broadcast flood advertisement';
+        body.appendChild(meta);
+      }
+
+      row.appendChild(body);
+      return row;
+    }
+
+    function renderList() {
+      var list = document.getElementById('packetsList');
+      var filtered = _events.filter(matchesFilter);
+      document.getElementById('packetCount').textContent = filtered.length + ' event' + (filtered.length !== 1 ? 's' : '');
+      list.innerHTML = '';
+      if (filtered.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'empty-state';
+        var label = _filter === 'advert' ? 'Advert' : badgeLabel(_filter);
+        empty.textContent = _filter === 'all' ? 'Waiting for mesh activity\u2026' : 'No ' + label + ' events yet';
+        list.appendChild(empty);
+        return;
+      }
+      filtered.forEach(function(evt) {
+        list.appendChild(buildRow(evt, false));
+      });
+    }
+
+    function mergeEvents(newEvents) {
+      var added = 0;
+      // Events come newest-first from API; process in reverse to add oldest first
+      var reversed = newEvents.slice().reverse();
+      reversed.forEach(function(evt) {
+        var id = evt.ts + '_' + evt.type + '_' + (evt.text || evt.ack_code || evt.route || '');
+        if (!_knownIds.has(id)) {
+          _knownIds.add(id);
+          _events.unshift(evt);
+          added++;
+        }
+      });
+      // Keep max 200 locally
+      if (_events.length > 200) { _events = _events.slice(0, 200); }
+      return added;
+    }
+
+    async function fetchPackets() {
+      try {
+        var resp = await fetch('/api/packets?limit=200');
+        if (!resp.ok) return;
+        var data = await resp.json();
+        var added = mergeEvents(data);
+        if (added > 0) renderList();
+      } catch (e) { /* network error — ignore */ }
+    }
+
+    fetchPackets();
+    _refreshInterval = setInterval(fetchPackets, 3000);
+  </script>
+</body>
+</html>

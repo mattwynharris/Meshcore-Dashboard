@@ -10,15 +10,33 @@
 <body>
 
   <header>
-    <h1>MeshCore Repeater Monitor</h1>
-    <div class="subtitle">LoRa Mesh Network Dashboard</div>
-    <div class="status-bar">
-      <span class="status-dot unknown" id="connDot"></span>
-      <span id="connText">Connecting...</span>
-      &mdash; Last update: <span id="lastUpdate">--</span>
-      <a href="/logs" class="logs-btn" title="Activity Logs">Logs</a>
-      <button class="settings-btn" onclick="openSettings()" title="Settings">&#9881;</button>
+    <div class="header-title">
+      <h1>MeshCore Repeater Monitor</h1>
+      <div class="subtitle">LoRa Mesh Network Dashboard</div>
+      <div class="header-meta">
+        <div class="node-status">
+          <span class="status-dot unknown" id="nodeDot"></span>
+          <span id="nodeText">Node: --</span>
+          <button id="pollToggleBtn" onclick="togglePolling()" style="display:none;margin-left:0.5rem;background:none;border:1px solid #334155;color:#94a3b8;font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:4px;cursor:pointer;font-family:inherit" title="Toggle duty-cycle polling"></button>
+        </div>
+        <span class="header-meta-sep">&mdash;</span>
+        <div class="conn-status">
+          <span class="status-dot unknown" id="connDot"></span>
+          <span id="connText">Connecting&hellip;</span>
+          <span id="lastUpdate" class="conn-time">--</span>
+        </div>
+      </div>
     </div>
+    <nav class="nav-group">
+      <a href="/map" class="nav-btn" title="Network Map">Map</a>
+      <a href="/messages" class="nav-btn" id="msgsNavLink" title="Messages">
+        Messages<span id="msgsBadge" class="msgs-unread-dot" style="display:none"></span>
+      </a>
+      <a href="/packets" class="nav-btn" title="Recent Packets">Packets</a>
+      <a href="/logs" class="nav-btn" title="Activity Logs">Logs</a>
+      <button id="ntfyToggleBtn" class="nav-btn nav-ntfy-btn" onclick="toggleNtfy()" title="Toggle push notifications" style="display:none">&#9993;</button>
+      <a href="/settings" class="nav-btn nav-settings" title="Settings">&#9881;</a>
+    </nav>
   </header>
 
   <div class="grid" id="repeaterGrid">
@@ -36,79 +54,6 @@
         <button class="modal-close" onclick="closeHistory()">&times;</button>
       </div>
       <canvas id="historyChart" height="250"></canvas>
-    </div>
-  </div>
-
-  <!-- Settings Modal -->
-  <div class="modal-overlay" id="settingsModal">
-    <div class="modal-content settings-panel">
-      <div class="modal-header">
-        <h2>Settings</h2>
-        <button class="modal-close" onclick="closeSettings()">&times;</button>
-      </div>
-
-      <!-- Companion Device -->
-      <div class="settings-section">
-        <h3>Companion Device</h3>
-        <div class="settings-row">
-          <div class="settings-field">
-            <label for="companionHost">IP Address</label>
-            <input type="text" id="companionHost" placeholder="192.168.1.100">
-          </div>
-          <div class="settings-field settings-field-small">
-            <label for="companionPort">Port</label>
-            <input type="number" id="companionPort" placeholder="5000" value="5000">
-          </div>
-        </div>
-      </div>
-
-      <!-- Polling Timing -->
-      <div class="settings-section">
-        <h3>Polling Timing</h3>
-        <div class="settings-row">
-          <div class="settings-field">
-            <label for="pollInterval">Poll Cycle (seconds)</label>
-            <input type="number" id="pollInterval" placeholder="120" min="30">
-          </div>
-          <div class="settings-field">
-            <label for="staggerDelay">Stagger Delay (seconds)</label>
-            <input type="number" id="staggerDelay" placeholder="15" min="5">
-          </div>
-          <div class="settings-field settings-field-small">
-            <label for="lowBatteryPct">Low Batt %</label>
-            <input type="number" id="lowBatteryPct" placeholder="20" min="5" max="50" value="20">
-          </div>
-        </div>
-      </div>
-
-      <!-- Repeaters -->
-      <div class="settings-section">
-        <h3>Repeaters</h3>
-        <div id="repeaterList"></div>
-        <button class="btn btn-add" onclick="addRepeaterRow()">+ Add Repeater</button>
-      </div>
-
-      <!-- Software Update -->
-      <div class="settings-section">
-        <h3>Software Update</h3>
-        <p class="settings-help">Upload a .zip of updated source files to apply changes without SSH access.</p>
-        <div class="update-row">
-          <input type="file" id="updateZipInput" accept=".zip" style="display:none" onchange="handleUpdateZip(this)">
-          <button class="btn btn-secondary" onclick="document.getElementById('updateZipInput').click()">Choose .zip&hellip;</button>
-          <span id="updateZipName" class="update-zip-name">No file chosen</span>
-          <button class="btn btn-secondary" id="uploadUpdateBtn" onclick="doSettingsUpdate()" disabled>Upload &amp; Apply</button>
-        </div>
-        <div id="updateResult" class="update-result"></div>
-      </div>
-
-      <!-- Save -->
-      <div class="settings-actions">
-        <span id="settingsStatus" class="settings-status"></span>
-        <input type="file" id="settingsFileInput" accept=".json" style="display:none" onchange="importSettingsFile(event)">
-        <button class="btn btn-secondary" onclick="document.getElementById('settingsFileInput').click()">Import from file</button>
-        <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveSettings()">Save &amp; Apply</button>
-      </div>
     </div>
   </div>
 

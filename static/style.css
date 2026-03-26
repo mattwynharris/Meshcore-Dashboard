@@ -15,28 +15,75 @@ body {
 /* --- Header --- */
 
 header {
-  text-align: center;
-  padding: 1rem 0 1.5rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid #1e293b;
   margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.header-title {
+  flex: 1;
+  min-width: 0;
 }
 
 header h1 {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   color: #38bdf8;
   font-weight: 700;
+  line-height: 1.2;
 }
 
 header .subtitle {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: #64748b;
-  margin-top: 0.25rem;
+  margin-top: 0.15rem;
 }
 
-header .status-bar {
-  font-size: 0.8rem;
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-top: 0.35rem;
+}
+
+.header-meta-sep {
+  color: #334155;
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.conn-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 20px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.75rem;
   color: #94a3b8;
-  margin-top: 0.5rem;
+  width: fit-content;
+}
+
+.conn-time {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.node-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 20px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.75rem;
+  width: fit-content;
 }
 
 /* --- Status Dot --- */
@@ -103,10 +150,18 @@ header .status-bar {
 }
 
 .card-route {
-  font-size: 0.65rem;
-  color: #94a3b8;
-  font-family: monospace;
+  font-size: 0.68rem;
+  color: #64748b;
+  margin-top: 3px;
+}
+
+.route-chain {
+  font-size: 0.62rem;
+  color: #64748b;
   margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* --- Metric Grid --- */
@@ -219,8 +274,29 @@ header .status-bar {
   color: #94a3b8;
 }
 
-.card-footer-seen {
+.card-footer-left {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.card-footer-seen {
+  /* no extra style needed */
+}
+
+.card-footer-route {
+  font-size: 0.68rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.card-offline-text {
+  font-size: 0.7rem;
+  color: #ef4444;
 }
 
 /* --- Settings Repeater Row Move Buttons --- */
@@ -231,6 +307,18 @@ header .status-bar {
   gap: 0.15rem;
   flex-shrink: 0;
   align-self: center;
+}
+
+.rpt-fw-badge {
+  display: inline-block;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 20px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.7rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+  letter-spacing: 0.02em;
 }
 
 .card-move-btn {
@@ -254,6 +342,26 @@ header .status-bar {
   opacity: 0.25;
   cursor: default;
 }
+
+.card-advert-btn {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid #334155;
+  color: #f97316;
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0.1rem 0.55rem;
+  border-radius: 4px;
+  font-family: inherit;
+  line-height: 1.4;
+  min-width: 2.5rem;
+  text-align: center;
+  transition: color 0.2s, border-color 0.2s;
+}
+.card-advert-btn:hover:not(:disabled) { color: #fb923c; border-color: #f97316; }
+.card-advert-btn:disabled { cursor: default; }
+.card-advert-btn.advert-ok   { border-color: #22c55e; color: #22c55e; }
+.card-advert-btn.advert-fail { border-color: #ef4444; color: #ef4444; }
 
 .card-ping-btn {
   flex-shrink: 0;
@@ -336,24 +444,52 @@ header .status-bar {
   color: #f1f5f9;
 }
 
-/* --- Settings Button --- */
+/* --- Header Nav Group --- */
 
-.settings-btn {
-  background: none;
-  border: 1px solid #334155;
-  color: #94a3b8;
-  font-size: 1.1rem;
-  cursor: pointer;
-  padding: 0.15rem 0.5rem;
-  border-radius: 6px;
-  margin-left: 0.75rem;
-  vertical-align: middle;
-  transition: color 0.2s, border-color 0.2s;
+.nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
-.settings-btn:hover {
+.nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  text-decoration: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  white-space: nowrap;
+  position: relative;
+}
+
+.nav-btn:hover {
+  color: #e2e8f0;
+  border-color: #64748b;
+}
+
+.nav-btn.nav-settings {
+  font-size: 1.1rem;
+  padding: 0.4rem 0.85rem;
+}
+
+.nav-btn.nav-ntfy-btn.ntfy-disabled {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.nav-btn.nav-btn-active {
   color: #38bdf8;
   border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
 }
 
 /* --- Settings Panel --- */
@@ -584,27 +720,41 @@ header .status-bar {
   margin-bottom: 0.5rem;
 }
 
-/* --- Logs Button --- */
+/* --- Logs Button (alias for nav-btn, kept for back-compat on sub-pages) --- */
 
 .logs-btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   background: none;
   border: 1px solid #334155;
-  color: #94a3b8;
-  font-size: 0.8rem;
-  cursor: pointer;
-  padding: 0.15rem 0.5rem;
   border-radius: 6px;
-  margin-left: 0.5rem;
-  vertical-align: middle;
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
   font-family: inherit;
   text-decoration: none;
+  cursor: pointer;
   transition: color 0.2s, border-color 0.2s;
+  white-space: nowrap;
+  position: relative;
 }
 
 .logs-btn:hover {
-  color: #38bdf8;
-  border-color: #38bdf8;
+  color: #e2e8f0;
+  border-color: #64748b;
+}
+
+.msgs-unread-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  background: #ef4444;
+  border-radius: 50%;
+  margin-left: 5px;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
 }
 
 /* --- Logs Panel --- */
@@ -776,30 +926,113 @@ header .status-bar {
 
 /* --- Responsive --- */
 
+/* ---- Mobile (phones, ≤ 640 px) ---- */
 @media (max-width: 640px) {
+
+  body {
+    padding: 0;
+  }
+
+  /* Stack header vertically: title → status → nav */
+  header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem 0.65rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .header-title {
+    text-align: center;
+  }
+
+  header h1 {
+    font-size: 1.15rem;
+  }
+
+  header .subtitle {
+    font-size: 0.7rem;
+  }
+
+  /* Status row: centre it, let it wrap naturally */
+  .header-status {
+    justify-content: center;
+    font-size: 0.75rem;
+    gap: 0.4rem;
+  }
+
+  /* Nav buttons: spread across full width as equal-sized chips */
+  .nav-group {
+    display: flex;
+    width: 100%;
+    gap: 0.4rem;
+  }
+
+  .nav-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 0.55rem 0.5rem;
+    font-size: 0.82rem;
+  }
+
+  .nav-btn.nav-settings {
+    flex: 0 0 auto;          /* gear icon keeps auto width */
+    padding: 0.5rem 0.9rem;
+    font-size: 1rem;
+  }
+
+  /* Card grid: single column */
   .grid {
     grid-template-columns: 1fr;
+    padding: 0 0.75rem;
   }
+
+  /* 2-column metrics inside cards */
   .metrics {
     grid-template-columns: 1fr 1fr;
   }
-  body {
-    padding: 0.5rem;
-  }
-  header h1 {
-    font-size: 1.2rem;
-  }
+
+  /* Logs panel adjustments */
   .logs-panel {
     max-width: 100%;
   }
+
   .logs-controls {
     flex-direction: column;
     align-items: stretch;
   }
+
   .log-source {
     display: none;
   }
+
   .logs-retention-setting {
     flex-wrap: wrap;
+  }
+}
+
+/* ---- Desktop (≥ 900 px) ---- */
+@media (min-width: 900px) {
+
+  header {
+    flex-wrap: nowrap;          /* never wrap — single line */
+  }
+
+  .header-title {
+    min-width: 200px;
+  }
+
+  .header-status {
+    flex: 1;                    /* take remaining space */
+    justify-content: center;    /* centre status between title and nav */
+  }
+
+  .nav-group {
+    flex-shrink: 0;
+  }
+
+  /* 3-column metrics on wide cards */
+  .metrics {
+    grid-template-columns: repeat(3, 1fr);
   }
 }

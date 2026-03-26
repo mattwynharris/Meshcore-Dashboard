@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Messages - MeshCore Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    /* ---- Page layout ---- */
+    .msg-page-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1rem 0;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .back-btn {
+      background: none;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      font-family: inherit;
+      text-decoration: none;
+      transition: color 0.2s, border-color 0.2s;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .back-btn:hover { color: #e2e8f0; border-color: #64748b; }
+    .msg-page-header h2 { margin: 0; font-size: 1.1rem; color: #e2e8f0; flex: 1; }
+
+    .msg-page-body {
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 4.5rem);
+      padding: 0 1rem;
+    }
+
+    /* ---- Channel tabs ---- */
+    .ch-tabs {
+      display: flex;
+      gap: 0.4rem;
+      padding: 0.75rem 0 0;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .ch-tab {
+      background: none;
+      border: 1px solid #334155;
+      color: #64748b;
+      font-size: 0.8rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .ch-tab:hover { color: #94a3b8; border-color: #475569; }
+    .ch-tab.active {
+      background: #1e40af;
+      border-color: #3b82f6;
+      color: #e2e8f0;
+    }
+
+    /* ---- Filter bar ---- */
+    .msg-filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      padding: 0.4rem 0 0;
+      flex-shrink: 0;
+    }
+    .msg-filter-label {
+      font-size: 0.72rem;
+      color: #475569;
+      white-space: nowrap;
+    }
+    .msg-hours-select {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-family: inherit;
+      outline: none;
+      cursor: pointer;
+    }
+    .msg-hours-select:focus { border-color: #3b82f6; }
+    .msg-search {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.65rem;
+      border-radius: 6px;
+      font-family: inherit;
+      flex: 1;
+      min-width: 0;
+      outline: none;
+    }
+    .msg-search:focus { border-color: #3b82f6; }
+    .msg-search::placeholder { color: #475569; }
+    .msg-filter-count {
+      font-size: 0.7rem;
+      color: #475569;
+      white-space: nowrap;
+    }
+
+    /* ---- Message list ---- */
+    .msg-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.75rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .msg-empty {
+      text-align: center;
+      color: #475569;
+      font-size: 0.85rem;
+      margin-top: 2rem;
+    }
+
+    /* Individual message bubble */
+    .msg-item {
+      display: flex;
+      flex-direction: column;
+      max-width: 78%;
+    }
+    .msg-item.outgoing {
+      align-self: flex-end;
+      align-items: flex-end;
+    }
+    .msg-item.incoming {
+      align-self: flex-start;
+      align-items: flex-start;
+    }
+    .msg-sender {
+      font-size: 0.7rem;
+      color: #64748b;
+      margin-bottom: 0.2rem;
+      padding: 0 0.3rem;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .msg-sender-name.has-route {
+      cursor: pointer;
+      text-decoration: underline dotted;
+      text-underline-offset: 2px;
+    }
+    .msg-sender-name.has-route:hover { color: #94a3b8; }
+    .msg-hops {
+      font-size: 0.62rem;
+      color: #475569;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 3px;
+      padding: 0.05rem 0.3rem;
+      white-space: nowrap;
+    }
+    .msg-reply-btn {
+      background: none;
+      border: none;
+      color: #475569;
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 0 0.1rem;
+      line-height: 1;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s;
+    }
+    .msg-item:hover .msg-reply-btn { opacity: 1; }
+    .msg-reply-btn:hover { color: #38bdf8; }
+    .msg-route-info {
+      font-size: 0.65rem;
+      color: #64748b;
+      padding: 0 0.3rem 0.2rem;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.2rem;
+      overflow-x: auto;
+    }
+    .msg-route-info .route-node {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 0.05rem 0.35rem;
+      font-family: monospace;
+      font-size: 0.65rem;
+      color: #38bdf8;
+      cursor: default;
+      white-space: nowrap;
+      position: relative;
+    }
+    .msg-route-info .route-node.known-node {
+      border-color: #38bdf8;
+      color: #7dd3fc;
+    }
+    .msg-route-info .route-node[title]:hover::after {
+      content: attr(title);
+      position: absolute;
+      bottom: calc(100% + 4px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #e2e8f0;
+      font-family: inherit;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .msg-route-info .route-arrow {
+      color: #475569;
+      font-size: 0.6rem;
+    }
+    .msg-route-info .route-unavail {
+      color: #475569;
+      font-style: italic;
+    }
+    .msg-bubble {
+      padding: 0.5rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .msg-item.outgoing .msg-bubble {
+      background: #1e3a5f;
+      border: 1px solid #2563eb;
+      color: #e2e8f0;
+      border-bottom-right-radius: 3px;
+    }
+    .msg-item.incoming .msg-bubble {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      border-bottom-left-radius: 3px;
+    }
+    .msg-time {
+      font-size: 0.65rem;
+      color: #475569;
+      margin-top: 0.2rem;
+      padding: 0 0.3rem;
+    }
+
+    /* ---- Compose area ---- */
+    .msg-compose {
+      flex-shrink: 0;
+      padding: 0.75rem 0 1rem;
+      border-top: 1px solid #1e293b;
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-end;
+    }
+    .msg-input {
+      flex: 1;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 0.55rem 0.75rem;
+      font-size: 0.85rem;
+      font-family: inherit;
+      resize: none;
+      min-height: 2.4rem;
+      max-height: 8rem;
+      line-height: 1.4;
+      overflow-y: auto;
+    }
+    .msg-input:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+    .msg-input.reply-mode { border-color: #0ea5e9; }
+    .msg-input::placeholder { color: #475569; }
+    .msg-send-btn {
+      background: #1e40af;
+      border: 1px solid #3b82f6;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 0.55rem 1.1rem;
+      font-size: 0.85rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .msg-send-btn:hover:not(:disabled) { background: #1d4ed8; }
+    .msg-send-btn:disabled { opacity: 0.45; cursor: default; }
+
+    /* ---- Status bar ---- */
+    .msg-status {
+      font-size: 0.75rem;
+      padding: 0.25rem 0;
+      min-height: 1.2rem;
+      color: #64748b;
+      flex-shrink: 0;
+    }
+    .msg-status.err { color: #ef4444; }
+    .msg-status.ok  { color: #22c55e; }
+
+    /* ---- Compose label ---- */
+    .msg-compose-label {
+      flex-shrink: 0;
+      font-size: 0.72rem;
+      color: #64748b;
+      padding: 0.3rem 0 0.1rem;
+      min-height: 1.1rem;
+    }
+    .msg-compose-label strong { color: #38bdf8; }
+    .compose-cancel-btn {
+      background: none;
+      border: 1px solid #334155;
+      color: #64748b;
+      font-size: 0.65rem;
+      cursor: pointer;
+      padding: 0.05rem 0.4rem;
+      border-radius: 3px;
+      margin-left: 0.4rem;
+      font-family: inherit;
+    }
+    .compose-cancel-btn:hover { color: #e2e8f0; border-color: #64748b; }
+
+    /* Seen-by count under outgoing messages */
+    .msg-acks {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #22c55e;
+      padding: 0.2rem 0.3rem 0;
+      text-align: right;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.3rem;
+    }
+    .msg-acks-zero { color: #475569; font-weight: 400; }
+    .msg-acks-fail { color: #ef4444; }
+    .msg-acks-waiting {
+      color: #f59e0b;
+      font-weight: 400;
+    }
+    .ack-pulse {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #f59e0b;
+      animation: ack-wait 1.4s infinite;
+      flex-shrink: 0;
+    }
+    @keyframes ack-wait {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.3; transform: scale(0.7); }
+    }
+    .ack-seen-flash {
+      animation: ack-flash 0.8s ease-out;
+    }
+    @keyframes ack-flash {
+      0% { color: #86efac; transform: scale(1.15); }
+      100% { color: #22c55e; transform: scale(1); }
+    }
+
+    /* Scrollbar styling */
+    .msg-list::-webkit-scrollbar { width: 4px; }
+    .msg-list::-webkit-scrollbar-track { background: transparent; }
+    .msg-list::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <div class="msg-page-header">
+    <a href="/" class="back-btn">&larr; Dashboard</a>
+    <a href="/map" class="back-btn">Map</a>
+    <h2>Messages</h2>
+  </div>
+
+  <div class="msg-page-body">
+    <div class="ch-tabs" id="chTabs"></div>
+    <div class="msg-filter-bar">
+      <span class="msg-filter-label">Show last</span>
+      <select class="msg-hours-select" id="msgHours" onchange="onHoursChange()">
+        <option value="1">1 hour</option>
+        <option value="6">6 hours</option>
+        <option value="12">12 hours</option>
+        <option value="24">24 hours</option>
+        <option value="48" selected>48 hours</option>
+        <option value="168">7 days</option>
+        <option value="720">30 days</option>
+      </select>
+      <input class="msg-search" id="msgSearch" type="search" placeholder="Search messages…" oninput="applySearch()">
+      <span class="msg-filter-count" id="msgFilterCount"></span>
+    </div>
+    <div class="msg-list" id="msgList">
+      <div class="msg-empty">Loading messages&hellip;</div>
+    </div>
+    <div class="msg-status" id="msgStatus"></div>
+    <div class="msg-compose-label" id="composeLabel"></div>
+    <div class="msg-compose">
+      <textarea class="msg-input" id="msgInput" placeholder="Type a message&hellip;" rows="1"></textarea>
+      <button class="msg-send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    var _channels = [];          // [{name, idx}] from settings
+    var _activeChannel = null;   // {name, idx} or null (= "All")
+    var _replyContact = null;    // {pubkey, name} for direct replies, or null
+    var _refreshTimer = null;
+    var _contactRoutes = {};     // pubkey-prefix -> {hops, route_path, name}
+    var _nodeNames = {};         // 2-char hex ID -> name (from node_names cache)
+    var _cachedRoutes = {};      // pubkey_prefix (upper) -> {hops, path} from contact-routes cache
+
+    // --- Utilities ---
+
+    function escapeHtml(str) {
+      var d = document.createElement('div');
+      d.appendChild(document.createTextNode(String(str)));
+      return d.innerHTML;
+    }
+
+    function fmtTime(ts) {
+      var d = new Date(ts * 1000);
+      var now = new Date();
+      var isSameDay = d.toDateString() === now.toDateString();
+      var time = d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+      if (isSameDay) return time;
+      return (d.getMonth()+1) + '/' + d.getDate() + ' ' + time;
+    }
+
+    function setStatus(msg, cls) {
+      var el = document.getElementById('msgStatus');
+      el.textContent = msg;
+      el.className = 'msg-status' + (cls ? ' ' + cls : '');
+    }
+
+    // --- Contact route lookup ---
+
+    function loadContactRoutes() {
+      fetch('/api/map')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          _contactRoutes = {};
+          (data.contacts || []).concat(data.repeaters || []).forEach(function(c) {
+            if (!c.pubkey) return;
+            var pk = c.pubkey.toLowerCase();
+            // Index by full key, 4-char prefix, and 2-char prefix for flexible matching
+            _contactRoutes[pk] = c;
+            if (pk.length >= 4) _contactRoutes[pk.substring(0, 4)] = c;
+            if (pk.length >= 2) _contactRoutes[pk.substring(0, 2)] = c;
+          });
+        })
+        .catch(function() {});
+
+      fetch('/api/node-names')
+        .then(function(r) { return r.json(); })
+        .then(function(data) { _nodeNames = data || {}; })
+        .catch(function() {});
+
+      fetch('/api/contact-routes')
+        .then(function(r) { return r.json(); })
+        .then(function(data) { _cachedRoutes = data || {}; })
+        .catch(function() {});
+    }
+
+    function lookupContact(pubkeyPrefix) {
+      if (!pubkeyPrefix) return null;
+      var p = pubkeyPrefix.toLowerCase();
+      return _contactRoutes[p] ||
+             _contactRoutes[p.substring(0, 4)] ||
+             _contactRoutes[p.substring(0, 2)] ||
+             null;
+    }
+
+    // --- Route chip renderer ---
+
+    function makeNode(hexStr) {
+      var el = document.createElement('span');
+      el.className = 'route-node';
+      el.textContent = hexStr.toUpperCase();
+      // Try node_names cache first (2-char hex ID → name)
+      var nodeName = _nodeNames[hexStr.toUpperCase()] || _nodeNames[hexStr.toLowerCase()];
+      if (!nodeName) {
+        var contact = lookupContact(hexStr);
+        if (contact && contact.name) nodeName = contact.name;
+      }
+      if (nodeName) {
+        // Known: blue border + highlight, name shown on hover
+        el.classList.add('known-node');
+        el.title = nodeName;
+      }
+      // Unknown: stays grey (default .route-node style)
+      return el;
+    }
+
+    function makeArrow() {
+      var el = document.createElement('span');
+      el.className = 'route-arrow';
+      el.textContent = '\u2192';
+      return el;
+    }
+
+    function buildRouteInfo(container, senderName, hops, routePath) {
+      container.innerHTML = '';
+      if (hops === 0) {
+        var d = document.createElement('span');
+        d.style.color = '#22c55e';
+        d.textContent = 'Direct connection to you';
+        container.appendChild(d);
+        return;
+      }
+      if (!routePath) {
+        var u = document.createElement('span');
+        u.className = 'route-unavail';
+        u.textContent = hops + ' hop' + (hops !== 1 ? 's' : '') + ' \u2014 route not available';
+        container.appendChild(u);
+        return;
+      }
+      // Sender origin node
+      var origin = document.createElement('span');
+      origin.className = 'route-node known-node';
+      origin.textContent = senderName;
+      container.appendChild(origin);
+      container.appendChild(makeArrow());
+
+      // Parse segments — split on " > " or ","
+      var segs = routePath.split(/\s*[>,]\s*/);
+      segs.forEach(function(seg, i) {
+        seg = seg.trim();
+        if (!seg) return;
+        container.appendChild(makeNode(seg));
+        container.appendChild(makeArrow());
+      });
+
+      var you = document.createElement('span');
+      you.className = 'route-node known-node';
+      you.style.color = '#22c55e';
+      you.style.borderColor = '#22c55e';
+      you.textContent = 'You';
+      container.appendChild(you);
+    }
+
+    // --- Channel tabs ---
+
+    function buildTabs() {
+      var tabs = document.getElementById('chTabs');
+      tabs.innerHTML = '';
+
+      // "All" tab — active only when no channel and no reply
+      var allActive = (_activeChannel === null && _replyContact === null);
+      var allTab = document.createElement('button');
+      allTab.className = 'ch-tab' + (allActive ? ' active' : '');
+      allTab.textContent = 'All';
+      allTab.onclick = function() { selectChannel(null); };
+      tabs.appendChild(allTab);
+
+      _channels.forEach(function(ch) {
+        var t = document.createElement('button');
+        var isActive = _activeChannel && _activeChannel.idx === ch.idx && !_replyContact;
+        t.className = 'ch-tab' + (isActive ? ' active' : '');
+        t.textContent = ch.name + ' (#' + ch.idx + ')';
+        t.onclick = function() { selectChannel(ch); };
+        tabs.appendChild(t);
+      });
+    }
+
+    function selectChannel(ch) {
+      _activeChannel = ch;
+      _replyContact = null;
+      buildTabs();
+      loadMessages();
+      updatePlaceholder();
+    }
+
+    // --- Reply ---
+
+    function setReply(pubkey, name, channelIdx) {
+      var input = document.getElementById('msgInput');
+      var prefix = '{' + name + ':} ';
+
+      if (!pubkey) {
+        // Channel message — no pubkey, so reply goes back to the same channel.
+        // Ensure that channel is selected, then just pre-fill the name.
+        if (channelIdx !== null && channelIdx !== undefined) {
+          for (var i = 0; i < _channels.length; i++) {
+            if (_channels[i].idx === channelIdx) { _activeChannel = _channels[i]; break; }
+          }
+        }
+        _replyContact = null;
+        input.value = prefix;
+      } else {
+        // Direct message — toggle DM reply mode
+        if (_replyContact && _replyContact.pubkey === pubkey) {
+          _replyContact = null;
+          if (input.value === prefix) input.value = '';
+        } else {
+          _replyContact = { pubkey: pubkey, name: name };
+          input.value = prefix;
+        }
+      }
+
+      input.style.height = '';
+      input.style.height = Math.min(input.scrollHeight, 128) + 'px';
+      buildTabs();
+      updatePlaceholder();
+      input.focus();
+      var len = input.value.length;
+      input.setSelectionRange(len, len);
+    }
+
+    function cancelReply() {
+      _replyContact = null;
+      buildTabs();
+      updatePlaceholder();
+    }
+
+    function updatePlaceholder() {
+      var input = document.getElementById('msgInput');
+      var label = document.getElementById('composeLabel');
+      var btn = document.getElementById('sendBtn');
+
+      if (_replyContact) {
+        input.placeholder = 'Reply to ' + _replyContact.name + '\u2026';
+        input.classList.add('reply-mode');
+        btn.disabled = false;
+        if (label) label.innerHTML =
+          '&#8617; Direct reply to <strong>' + escapeHtml(_replyContact.name) + '</strong>' +
+          '<button class="compose-cancel-btn" onclick="cancelReply()">&#215; Cancel</button>';
+      } else if (_activeChannel === null) {
+        input.placeholder = 'Select a channel to send a message\u2026';
+        input.classList.remove('reply-mode');
+        btn.disabled = true;
+        if (label) label.innerHTML = '';
+      } else {
+        input.placeholder = 'Type a message\u2026 (Shift+Enter for new line)';
+        input.classList.remove('reply-mode');
+        btn.disabled = false;
+        if (label) label.innerHTML = 'Sending to <strong>' + escapeHtml(_activeChannel.name) + '</strong>';
+      }
+    }
+
+    // --- Messages ---
+
+    var _allMessages = [];  // raw API response, newest-first
+
+    function onHoursChange() {
+      loadMessages();
+    }
+
+    function applySearch() {
+      renderMessages(_allMessages);
+    }
+
+    function loadMessages() {
+      var sel = document.getElementById('msgHours');
+      var hours = sel ? sel.value : '48';
+      var url = '/api/messages?hours=' + hours + '&limit=500';
+      if (_activeChannel !== null) {
+        url += '&channel_idx=' + _activeChannel.idx;
+      }
+      fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(msgs) {
+          _allMessages = msgs;
+          renderMessages(msgs);
+          if (msgs.length > 0) {
+            var latest = msgs[0].ts;
+            var stored = parseFloat(localStorage.getItem('meshcore_last_msg_seen') || '0');
+            if (latest > stored) {
+              localStorage.setItem('meshcore_last_msg_seen', latest.toString());
+            }
+          }
+        })
+        .catch(function() {});
+    }
+
+    function renderMessages(msgs) {
+      var list = document.getElementById('msgList');
+      var wasAtBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+
+      // Apply text search client-side
+      var searchEl = document.getElementById('msgSearch');
+      var term = searchEl ? searchEl.value.trim().toLowerCase() : '';
+      var filtered = term ? msgs.filter(function(m) {
+        var hay = [m.text, m.sender_name, m.sender_pubkey].filter(Boolean).join(' ').toLowerCase();
+        return hay.indexOf(term) !== -1;
+      }) : msgs;
+
+      // Update count badge
+      var countEl = document.getElementById('msgFilterCount');
+      if (countEl) {
+        if (term) {
+          countEl.textContent = filtered.length + ' of ' + msgs.length;
+        } else {
+          countEl.textContent = msgs.length + ' message' + (msgs.length !== 1 ? 's' : '');
+        }
+      }
+
+      // msgs are newest-first from the API; reverse to show oldest first
+      var ordered = filtered.slice().reverse();
+
+      if (ordered.length === 0) {
+        list.innerHTML = '<div class="msg-empty">No messages yet</div>';
+        return;
+      }
+
+      list.innerHTML = '';
+      ordered.forEach(function(m) {
+        var isOut = m.direction === 'out';
+        var item = document.createElement('div');
+        item.className = 'msg-item ' + (isOut ? 'outgoing' : 'incoming');
+
+        if (!isOut) {
+          var senderName = m.sender_name || (m.sender_pubkey ? m.sender_pubkey.substring(0, 8) : 'Unknown');
+          // Channel messages have no sender_pubkey — the real sender's name is
+          // embedded in the text as "Name: message text". Extract it.
+          var displayName = senderName;
+          if (!m.sender_pubkey) {
+            var nameMatch = m.text.match(/^([^:\n]{1,60}):\s+/);
+            if (nameMatch) displayName = nameMatch[1].trim();
+          }
+          // Prefer hops/path stored at message receipt time (exact for that message).
+          // Fall back to live contact routing table if not stored yet.
+          var hops = (m.hops !== undefined && m.hops >= 0) ? m.hops : null;
+          var routePath = m.path || '';
+          if (m.sender_pubkey && (hops === null || !routePath)) {
+            var contact = lookupContact(m.sender_pubkey);
+            if (contact) {
+              if (hops === null) hops = contact.hops;
+              if (!routePath) routePath = contact.route_path || '';
+            }
+          }
+          // Final fallback: contact route cache from PATH_RESPONSE events
+          if (!routePath && m.sender_pubkey) {
+            var pk = m.sender_pubkey.toUpperCase();
+            var cr = _cachedRoutes[pk] || _cachedRoutes[pk.substring(0, 2)];
+            if (cr) {
+              if (hops === null) hops = cr.hops;
+              routePath = cr.path || '';
+            }
+          }
+
+          // Sender row
+          var senderRow = document.createElement('div');
+          senderRow.className = 'msg-sender';
+
+          var nameSpan = document.createElement('span');
+          nameSpan.className = 'msg-sender-name';
+          nameSpan.textContent = displayName;
+
+          // Route info row (hidden by default, toggled by clicking name)
+          var routeInfo = document.createElement('div');
+          routeInfo.className = 'msg-route-info';
+          routeInfo.style.display = 'none';
+
+          if (hops !== null) {
+            nameSpan.classList.add('has-route');
+            buildRouteInfo(routeInfo, displayName, hops, routePath);
+            nameSpan.addEventListener('click', function() {
+              routeInfo.style.display = routeInfo.style.display === 'none' ? '' : 'none';
+            });
+          }
+          senderRow.appendChild(nameSpan);
+
+          // Hops badge
+          if (hops !== null) {
+            var hopsSpan = document.createElement('span');
+            hopsSpan.className = 'msg-hops';
+            hopsSpan.textContent = hops === 0 ? 'Direct' : hops + ' hop' + (hops !== 1 ? 's' : '');
+            senderRow.appendChild(hopsSpan);
+          }
+
+          // Reply button
+          var replyBtn = document.createElement('button');
+          replyBtn.className = 'msg-reply-btn';
+          replyBtn.title = 'Reply to ' + displayName;
+          replyBtn.innerHTML = '&#8617;';
+          (function(pk, nm, chIdx) {
+            replyBtn.addEventListener('click', function() { setReply(pk, nm, chIdx); });
+          })(m.sender_pubkey, displayName, m.channel_idx);
+          senderRow.appendChild(replyBtn);
+
+          item.appendChild(senderRow);
+          item.appendChild(routeInfo);
+        } else {
+          var senderRow = document.createElement('div');
+          senderRow.className = 'msg-sender';
+          senderRow.textContent = 'You';
+          item.appendChild(senderRow);
+        }
+
+        var bubble = document.createElement('div');
+        bubble.className = 'msg-bubble';
+        bubble.textContent = m.text;
+        item.appendChild(bubble);
+
+        var timeEl = document.createElement('div');
+        timeEl.className = 'msg-time';
+        timeEl.textContent = fmtTime(m.ts);
+        item.appendChild(timeEl);
+
+        // Seen-by count for outgoing messages
+        if (isOut) {
+          var acksEl = document.createElement('div');
+          acksEl.dataset.msgAcks = m.acks;
+          if (m.acks > 0) {
+            acksEl.className = 'msg-acks';
+            acksEl.innerHTML = '\u2713 Seen by ' + m.acks + (m.acks === 1 ? ' node' : ' nodes');
+          } else if (m.ack_code) {
+            // Has ack_code = radio accepted it, waiting for confirmation from the other end
+            acksEl.className = 'msg-acks msg-acks-waiting';
+            acksEl.innerHTML = '<span class="ack-pulse"></span> Waiting for acknowledgement';
+          } else {
+            acksEl.className = 'msg-acks msg-acks-zero';
+            acksEl.textContent = '\u2713 Sent';
+          }
+          item.appendChild(acksEl);
+        }
+
+        list.appendChild(item);
+      });
+
+      if (wasAtBottom) {
+        list.scrollTop = list.scrollHeight;
+      }
+    }
+
+    // --- Send ---
+
+    function sendMessage() {
+      if (!_replyContact && !_activeChannel) return;
+      var input = document.getElementById('msgInput');
+      var text = input.value.trim();
+      if (!text) return;
+
+      var btn = document.getElementById('sendBtn');
+      btn.disabled = true;
+      setStatus('');
+
+      var body = _replyContact
+        ? { pubkey: _replyContact.pubkey, text: text }
+        : { channel_idx: _activeChannel.idx, text: text };
+
+      fetch('/api/messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(result) {
+          if (result.ok) {
+            input.value = '';
+            input.style.height = '';
+            setStatus('');
+            if (_replyContact) {
+              _replyContact = null;
+              buildTabs();
+              updatePlaceholder();
+            }
+            loadMessages();
+          } else {
+            var errMsg = result.error || 'unknown error';
+            setStatus('\u2717 Failed: ' + errMsg, 'err');
+            // Re-enable so the user can retry
+          }
+          btn.disabled = (_replyContact === null && _activeChannel === null);
+        })
+        .catch(function(e) {
+          setStatus('\u2717 Not sent \u2014 ' + e.message, 'err');
+          btn.disabled = (_replyContact === null && _activeChannel === null);
+        });
+    }
+
+    // --- Auto-resize textarea + keyboard shortcuts ---
+
+    document.addEventListener('DOMContentLoaded', function() {
+      var input = document.getElementById('msgInput');
+
+      input.addEventListener('input', function() {
+        this.style.height = '';
+        this.style.height = Math.min(this.scrollHeight, 128) + 'px';
+      });
+
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+        // Escape cancels reply mode
+        if (e.key === 'Escape' && _replyContact) {
+          cancelReply();
+        }
+      });
+
+      // Load contact routes for hop count / route display
+      loadContactRoutes();
+
+      // Load channels from device (falls back to settings channels if not connected)
+      fetch('/api/channels')
+        .then(function(r) { return r.json(); })
+        .then(function(chs) {
+          _channels = Array.isArray(chs) && chs.length > 0 ? chs : [{ name: 'Primary', idx: 0 }];
+
+          if (_channels.length > 0) {
+            _activeChannel = _channels[0];
+          }
+
+          buildTabs();
+          loadMessages();
+          updatePlaceholder();
+
+          // Auto-refresh every 5s (also refreshes route data periodically)
+          _refreshTimer = setInterval(function() {
+            loadMessages();
+            loadContactRoutes();
+          }, 5000);
+        })
+        .catch(function() {
+          _channels = [{ name: 'Primary', idx: 0 }];
+          _activeChannel = _channels[0];
+          buildTabs();
+          loadMessages();
+          updatePlaceholder();
+          _refreshTimer = setInterval(function() {
+            loadMessages();
+            loadContactRoutes();
+          }, 5000);
+        });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - MeshCore Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .settings-page-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 0 1.25rem;
+      border-bottom: 1px solid #1e293b;
+      margin-bottom: 1.5rem;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .back-btn {
+      background: none;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      font-family: inherit;
+      text-decoration: none;
+      transition: color 0.2s, border-color 0.2s;
+      display: inline-block;
+    }
+    .back-btn:hover { color: #e2e8f0; border-color: #64748b; }
+    .settings-page-header h2 { margin: 0; font-size: 1.1rem; color: #e2e8f0; }
+    .settings-page-body {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 1rem 2rem;
+    }
+    /* Connection status */
+    .conn-status-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .conn-status-text {
+      flex: 1;
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+    .conn-status-text strong { color: #e2e8f0; }
+  </style>
+</head>
+<body>
+
+  <div class="settings-page-header">
+    <a href="/" class="back-btn">&larr; Dashboard</a>
+    <h2>Settings</h2>
+  </div>
+
+  <div class="settings-page-body">
+
+    <!-- Connection Status -->
+    <div class="settings-section">
+      <h3>Connection Status</h3>
+      <div class="conn-status-row">
+        <span class="status-dot unknown" id="connStatusDot"></span>
+        <span class="conn-status-text" id="connStatusText">Checking&hellip;</span>
+        <button class="btn btn-secondary" id="connToggleBtn" onclick="toggleConnection()" style="min-width:6rem">
+          &hellip;
+        </button>
+      </div>
+    </div>
+
+    <!-- Companion Device -->
+    <div class="settings-section">
+      <h3>Companion Device</h3>
+      <div class="settings-row">
+        <div class="settings-field">
+          <label for="companionHost">IP Address</label>
+          <input type="text" id="companionHost" placeholder="192.168.1.100">
+        </div>
+        <div class="settings-field settings-field-small">
+          <label for="companionPort">Port</label>
+          <input type="number" id="companionPort" placeholder="5000" value="5000">
+        </div>
+      </div>
+    </div>
+
+    <!-- Polling Timing -->
+    <div class="settings-section">
+      <h3>Polling Timing</h3>
+      <div class="settings-row">
+        <div class="settings-field">
+          <label for="pollInterval">Poll Cycle (seconds)</label>
+          <input type="number" id="pollInterval" placeholder="3600" min="30">
+        </div>
+        <div class="settings-field">
+          <label for="staggerDelay">Stagger Delay (seconds)</label>
+          <input type="number" id="staggerDelay" placeholder="30" min="5">
+        </div>
+        <div class="settings-field settings-field-small">
+          <label for="lowBatteryPct">Low Batt %</label>
+          <input type="number" id="lowBatteryPct" placeholder="20" min="5" max="50" value="20">
+        </div>
+      </div>
+    </div>
+
+    <!-- Channels -->
+    <div class="settings-section">
+      <h3>Channels</h3>
+      <p class="settings-help">Name each channel index you want to monitor and message on. Channel passwords are configured on the device using the MeshCore app — the dashboard uses whatever channels are already set up on the node.</p>
+      <div id="channelList"></div>
+      <button class="btn btn-add" onclick="addChannelRow()">+ Add Channel</button>
+    </div>
+
+    <!-- Repeaters -->
+    <div class="settings-section">
+      <h3>Repeaters</h3>
+      <div id="repeaterList"></div>
+      <button class="btn btn-add" onclick="addRepeaterRow()">+ Add Repeater</button>
+    </div>
+
+    <!-- Push Notifications -->
+    <div class="settings-section">
+      <h3>Push Notifications (ntfy)</h3>
+      <p class="settings-help">Get a phone notification when a message arrives. Uses <a href="https://ntfy.sh" target="_blank" style="color:#38bdf8">ntfy.sh</a> by default, or point to your own self-hosted ntfy server. Leave topic blank to disable.</p>
+      <div class="settings-field">
+        <div class="settings-label">ntfy Topic</div>
+        <input type="text" id="ntfyTopic" placeholder="e.g. meshcore-mattwh-alerts">
+      </div>
+      <div class="settings-field" style="margin-top:0.6rem">
+        <div class="settings-label">ntfy Server</div>
+        <input type="text" id="ntfyServer" placeholder="https://ntfy.sh">
+      </div>
+      <div class="settings-field" style="margin-top:0.6rem">
+        <div class="settings-label">Dashboard URL <span style="font-size:0.75em;color:#64748b">(tap notification to open)</span></div>
+        <input type="text" id="dashboardUrl" placeholder="http://192.168.1.100:8080">
+      </div>
+      <div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.75rem">
+        <button class="btn btn-secondary" onclick="testNtfy()">Send Test Notification</button>
+        <span id="ntfyTestResult" style="font-size:0.82rem"></span>
+      </div>
+    </div>
+
+    <!-- Software Update -->
+    <div class="settings-section">
+      <h3>Software Update</h3>
+      <p class="settings-help">Upload a .zip of updated source files to apply changes without SSH access.</p>
+      <div class="update-row">
+        <input type="file" id="updateZipInput" accept=".zip" style="display:none" onchange="handleUpdateZip(this)">
+        <button class="btn btn-secondary" onclick="document.getElementById('updateZipInput').click()">Choose .zip&hellip;</button>
+        <span id="updateZipName" class="update-zip-name">No file chosen</span>
+        <button class="btn btn-secondary" id="uploadUpdateBtn" onclick="doUpdate()" disabled>Upload &amp; Apply</button>
+      </div>
+      <div id="updateResult" class="update-result"></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="settings-actions">
+      <span id="settingsStatus" class="settings-status"></span>
+      <a href="/" class="btn btn-secondary">Cancel</a>
+      <button class="btn btn-primary" onclick="saveSettings()">Save &amp; Apply</button>
+    </div>
+
+  </div>
+
+  <script>
+    // --- Utilities ---
+
+    function escapeAttr(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function showStatus(msg, isError) {
+      var el = document.getElementById('settingsStatus');
+      el.textContent = msg;
+      el.className = 'settings-status' + (isError ? ' settings-status-error' : ' settings-status-ok');
+    }
+
+    // --- Connection Status ---
+
+    var _isConnected = null;
+
+    function updateConnectionUI(connected, host, port) {
+      _isConnected = connected;
+      var dot = document.getElementById('connStatusDot');
+      var txt = document.getElementById('connStatusText');
+      var btn = document.getElementById('connToggleBtn');
+      dot.className = 'status-dot ' + (connected ? 'online' : 'offline');
+      txt.innerHTML = connected
+        ? 'Connected to <strong>' + escapeAttr(host) + ':' + port + '</strong>'
+        : 'Not connected to companion device';
+      btn.textContent = connected ? 'Disconnect' : 'Connect';
+    }
+
+    function loadConnectionStatus() {
+      fetch('/api/connection')
+        .then(function(r) { return r.json(); })
+        .then(function(d) { updateConnectionUI(d.connected, d.host, d.port); })
+        .catch(function() {});
+    }
+
+    function toggleConnection() {
+      var btn = document.getElementById('connToggleBtn');
+      btn.disabled = true;
+      btn.textContent = '\u2026';
+      var wantDisconnect = _isConnected;
+      var endpoint = wantDisconnect ? '/api/disconnect' : '/api/connect';
+      fetch(endpoint, { method: 'POST' })
+        .then(function() {
+          // Poll until the status actually flips (up to 20 attempts × 1s)
+          var attempts = 0;
+          function poll() {
+            fetch('/api/connection')
+              .then(function(r) { return r.json(); })
+              .then(function(d) {
+                var flipped = wantDisconnect ? !d.connected : d.connected;
+                if (flipped || attempts >= 30) {
+                  btn.disabled = false;
+                  updateConnectionUI(d.connected, d.host, d.port);
+                } else {
+                  attempts++;
+                  setTimeout(poll, 1000);
+                }
+              })
+              .catch(function() { btn.disabled = false; });
+          }
+          setTimeout(poll, 500);
+        })
+        .catch(function() { btn.disabled = false; });
+    }
+
+    // Refresh connection status every 5s
+    setInterval(loadConnectionStatus, 5000);
+
+    // --- Channel Rows ---
+
+    function addChannelRow(name, idx) {
+      var list = document.getElementById('channelList');
+      var row = document.createElement('div');
+      row.className = 'repeater-row';
+      row.innerHTML =
+        '<div class="settings-field">' +
+          '<label>Name</label>' +
+          '<input type="text" class="ch-name" placeholder="Primary" value="' + escapeAttr(name || '') + '">' +
+        '</div>' +
+        '<div class="settings-field settings-field-small">' +
+          '<label>Channel #</label>' +
+          '<input type="number" class="ch-idx" placeholder="0" min="0" max="9" value="' + escapeAttr(idx !== undefined ? idx : '') + '">' +
+        '</div>' +
+        '<button class="btn-remove" title="Remove">&times;</button>';
+      row.querySelector('.btn-remove').addEventListener('click', function() { row.remove(); });
+      list.appendChild(row);
+    }
+
+    // --- Repeater Rows ---
+
+    function moveRepeaterRow(row, direction) {
+      var list = document.getElementById('repeaterList');
+      if (!list) return;
+      if (direction === -1 && row.previousElementSibling) {
+        list.insertBefore(row, row.previousElementSibling);
+      } else if (direction === 1 && row.nextElementSibling) {
+        list.insertBefore(row.nextElementSibling, row);
+      }
+    }
+
+    function addRepeaterRow(name, pubkey, adminPass, path, fwVersion) {
+      var list = document.getElementById('repeaterList');
+      var row = document.createElement('div');
+      row.className = 'repeater-row';
+      var fwBadge = fwVersion
+        ? '<span class="rpt-fw-badge" title="Firmware version">FW ' + escapeAttr(fwVersion) + '</span>'
+        : '';
+      row.innerHTML =
+        '<div class="rpt-move-btns">' +
+          '<button class="card-move-btn rpt-move-up" title="Move up">&#8593;</button>' +
+          '<button class="card-move-btn rpt-move-down" title="Move down">&#8595;</button>' +
+        '</div>' +
+        '<div class="settings-field">' +
+          '<label>Name</label>' +
+          '<input type="text" class="rpt-name" placeholder="My Repeater" value="' + escapeAttr(name || '') + '">' +
+          fwBadge +
+        '</div>' +
+        '<div class="settings-field">' +
+          '<label>Public Key</label>' +
+          '<input type="text" class="rpt-pubkey" placeholder="a1b2c3d4e5f6..." value="' + escapeAttr(pubkey || '') + '">' +
+        '</div>' +
+        '<div class="settings-field settings-field-small">' +
+          '<label>Admin Pass</label>' +
+          '<input type="text" class="rpt-pass" placeholder="password" value="' + escapeAttr(adminPass || '') + '">' +
+        '</div>' +
+        '<div class="settings-field settings-field-path">' +
+          '<label>Path</label>' +
+          '<input type="text" class="rpt-path" placeholder="4d,3c,ee" value="' + escapeAttr(path || '') + '">' +
+        '</div>' +
+        '<button class="btn-remove" title="Remove">&times;</button>';
+
+      row.querySelector('.rpt-move-up').addEventListener('click', function() { moveRepeaterRow(row, -1); });
+      row.querySelector('.rpt-move-down').addEventListener('click', function() { moveRepeaterRow(row, 1); });
+      row.querySelector('.btn-remove').addEventListener('click', function() { row.remove(); });
+      list.appendChild(row);
+    }
+
+    // --- ntfy Test ---
+
+    function testNtfy() {
+      var topic = document.getElementById('ntfyTopic').value.trim();
+      var server = document.getElementById('ntfyServer').value.trim() || 'https://ntfy.sh';
+      var clickUrl = document.getElementById('dashboardUrl').value.trim();
+      var resultEl = document.getElementById('ntfyTestResult');
+      if (!topic) { resultEl.style.color = '#f87171'; resultEl.textContent = 'Enter a topic first'; return; }
+      resultEl.style.color = '#94a3b8';
+      resultEl.textContent = 'Sending\u2026';
+      fetch('/api/ntfy/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: topic, server: server, click_url: clickUrl })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.ok) {
+            resultEl.style.color = '#4ade80';
+            resultEl.textContent = '\u2713 Sent — check your phone';
+          } else {
+            resultEl.style.color = '#f87171';
+            resultEl.textContent = 'Failed: ' + (res.error || 'unknown error');
+          }
+        })
+        .catch(function() {
+          resultEl.style.color = '#f87171';
+          resultEl.textContent = 'Request failed';
+        });
+    }
+
+    // --- Save ---
+
+    function saveSettings() {
+      var host = document.getElementById('companionHost').value.trim();
+      var port = document.getElementById('companionPort').value.trim();
+      var pollInterval = document.getElementById('pollInterval').value.trim();
+      var staggerDelay = document.getElementById('staggerDelay').value.trim();
+      var lowBatPct = document.getElementById('lowBatteryPct').value.trim();
+
+      if (!host) { showStatus('Companion IP is required', true); return; }
+
+      // Collect channels
+      var chRows = document.querySelectorAll('#channelList .repeater-row');
+      var channels = [];
+      for (var i = 0; i < chRows.length; i++) {
+        var cn = chRows[i].querySelector('.ch-name').value.trim();
+        var ci = chRows[i].querySelector('.ch-idx').value.trim();
+        if (cn && ci !== '') {
+          channels.push({ name: cn, idx: parseInt(ci) || 0 });
+        }
+      }
+
+      // Collect repeaters
+      var rows = document.querySelectorAll('.repeater-row');
+      var repeaters = [];
+      for (var j = 0; j < rows.length; j++) {
+        if (!rows[j].querySelector('.rpt-name')) continue;
+        var n = rows[j].querySelector('.rpt-name').value.trim();
+        var p = rows[j].querySelector('.rpt-pubkey').value.trim();
+        var pw = rows[j].querySelector('.rpt-pass').value.trim();
+        var pt = rows[j].querySelector('.rpt-path').value.trim();
+        if (n && p) {
+          var rpt = { name: n, pubkey: p, path: pt };
+          if (pw) rpt.admin_pass = pw;
+          repeaters.push(rpt);
+        } else if (n || p) {
+          showStatus('Each repeater needs both a name and public key', true);
+          return;
+        }
+      }
+
+      var ntfyTopic = document.getElementById('ntfyTopic').value.trim();
+      var ntfyServer = document.getElementById('ntfyServer').value.trim();
+      var dashboardUrl = document.getElementById('dashboardUrl').value.trim();
+
+      var payload = {
+        companion_host: host,
+        companion_port: parseInt(port) || 5000,
+        repeaters: repeaters,
+        channels: channels,
+        poll_interval_seconds: parseInt(pollInterval) || 3600,
+        stagger_delay_seconds: parseInt(staggerDelay) || 30,
+        stale_threshold_seconds: 900,
+        low_battery_percent: parseInt(lowBatPct) || 20,
+        ntfy_topic: ntfyTopic,
+        ntfy_server: ntfyServer || "https://ntfy.sh",
+        dashboard_url: dashboardUrl
+      };
+
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(result) {
+          if (result.ok) {
+            showStatus('Saved! Returning to dashboard...', false);
+            setTimeout(function() { window.location = '/'; }, 1200);
+          } else {
+            showStatus(result.error || 'Save failed', true);
+          }
+        })
+        .catch(function(err) { showStatus('Network error: ' + err.message, true); });
+    }
+
+    // --- Software Update ---
+
+    var _updateFile = null;
+
+    function handleUpdateZip(input) {
+      var f = input.files[0];
+      input.value = '';
+      if (!f) return;
+      _updateFile = f;
+      document.getElementById('updateZipName').textContent = f.name + ' (' + (f.size / 1024).toFixed(0) + ' KB)';
+      document.getElementById('uploadUpdateBtn').disabled = false;
+      document.getElementById('updateResult').textContent = '';
+      document.getElementById('updateResult').className = 'update-result';
+    }
+
+    function doUpdate() {
+      if (!_updateFile) return;
+      var btn = document.getElementById('uploadUpdateBtn');
+      var resultEl = document.getElementById('updateResult');
+      btn.disabled = true;
+      resultEl.textContent = 'Uploading...';
+      resultEl.className = 'update-result';
+
+      var fd = new FormData();
+      fd.append('file', _updateFile);
+
+      fetch('/api/update', { method: 'POST', body: fd })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok) {
+            var count = (data.files || []).length;
+            resultEl.innerHTML = '<span class="update-ok">&#10003; ' + count + ' file' + (count !== 1 ? 's' : '') + ' applied.</span> ';
+            var rb = document.createElement('button');
+            rb.className = 'btn btn-primary';
+            rb.style.cssText = 'padding:0.2rem 0.7rem;font-size:0.8rem';
+            rb.textContent = 'Restart Now';
+            rb.onclick = doRestart;
+            resultEl.appendChild(rb);
+            _updateFile = null;
+          } else {
+            resultEl.textContent = 'Error: ' + data.error;
+            resultEl.className = 'update-result err';
+            btn.disabled = false;
+          }
+        })
+        .catch(function(e) {
+          resultEl.textContent = 'Network error: ' + e.message;
+          resultEl.className = 'update-result err';
+          btn.disabled = false;
+        });
+    }
+
+    function doRestart() {
+      var resultEl = document.getElementById('updateResult');
+      resultEl.innerHTML = 'Restarting \u2014 page will reload when server is back\u2026';
+      resultEl.className = 'update-result';
+      fetch('/api/restart', { method: 'POST' }).catch(function() {});
+      function poll() {
+        fetch('/').then(function(r) {
+          if (r.ok) { window.location = '/'; }
+          else { setTimeout(poll, 2000); }
+        }).catch(function() { setTimeout(poll, 2000); });
+      }
+      setTimeout(poll, 2000);
+    }
+
+    // --- Load on page open ---
+
+    document.addEventListener('DOMContentLoaded', function() {
+      loadConnectionStatus();
+
+      fetch('/api/settings')
+        .then(function(r) { return r.json(); })
+        .then(function(s) {
+          document.getElementById('companionHost').value = s.companion_host || '';
+          document.getElementById('companionPort').value = s.companion_port || 5000;
+          document.getElementById('pollInterval').value = s.poll_interval_seconds || 3600;
+          document.getElementById('staggerDelay').value = s.stagger_delay_seconds || 30;
+          document.getElementById('lowBatteryPct').value = s.low_battery_percent || 20;
+          document.getElementById('ntfyTopic').value = s.ntfy_topic || '';
+          document.getElementById('ntfyServer').value = s.ntfy_server || 'https://ntfy.sh';
+          document.getElementById('dashboardUrl').value = s.dashboard_url || '';
+
+          // Channels
+          var chList = document.getElementById('channelList');
+          chList.innerHTML = '';
+          var channels = s.channels || [{ name: 'Primary', idx: 0 }];
+          channels.forEach(function(c) { addChannelRow(c.name, c.idx); });
+
+          // Repeaters — also fetch live data to get FW versions
+          var list = document.getElementById('repeaterList');
+          list.innerHTML = '';
+          var repeaters = s.repeaters || [];
+
+          fetch('/api/repeaters')
+            .then(function(r) { return r.json(); })
+            .catch(function() { return []; })
+            .then(function(liveData) {
+              // Build a pubkey→fw_version lookup from live store
+              var fwMap = {};
+              (liveData || []).forEach(function(d) {
+                if (d.pubkey && d.fw_version) fwMap[d.pubkey] = d.fw_version;
+              });
+
+              if (repeaters.length === 0) {
+                addRepeaterRow();
+              } else {
+                repeaters.forEach(function(r) {
+                  var fw = fwMap[r.pubkey] || '';
+                  addRepeaterRow(r.name, r.pubkey, r.admin_pass, r.path, fw);
+                });
+              }
+            });
+        })
+        .catch(function() { showStatus('Failed to load settings', true); });
+    });
+  </script>
+</body>
+</html>
