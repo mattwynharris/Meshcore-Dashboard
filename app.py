@@ -76,27 +76,27 @@ async def index():
 
 @app.get("/logs", response_class=HTMLResponse)
 async def logs_page(request: Request):
-    return templates.TemplateResponse("logs.html", {"request": request})
+    return templates.TemplateResponse(request, "logs.html")
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
-    return templates.TemplateResponse("settings.html", {"request": request})
+    return templates.TemplateResponse(request, "settings.html")
 
 
 @app.get("/messages", response_class=HTMLResponse)
 async def messages_page(request: Request):
-    return templates.TemplateResponse("messages.html", {"request": request})
+    return templates.TemplateResponse(request, "messages.html")
 
 
 @app.get("/map", response_class=HTMLResponse)
 async def map_page(request: Request):
-    return templates.TemplateResponse("map.html", {"request": request})
+    return templates.TemplateResponse(request, "map.html")
 
 
 @app.get("/packets", response_class=HTMLResponse)
 async def packets_page(request: Request):
-    return templates.TemplateResponse("packets.html", {"request": request})
+    return templates.TemplateResponse(request, "packets.html")
 
 
 # --- Repeater Data API ---
