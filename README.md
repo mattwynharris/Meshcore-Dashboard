@@ -52,6 +52,8 @@ The script builds the Docker image and starts the dashboard. It prints the URL w
 
 ### 3. Open the dashboard and configure it
 
+> **Requirement:** You need a MeshCore WiFi companion node running and accessible on your network. The companion node must have TCP enabled — it listens on port **5000** by default.
+
 Go to `http://<device-ip>:8080`, click the **⚙ Settings** icon and enter:
 
 - Companion device IP address and port *(default port: 5000)*
