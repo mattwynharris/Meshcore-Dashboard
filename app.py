@@ -362,13 +362,13 @@ async def save_settings(request: Request):
 
     # Map settings
     body.setdefault("map_path_max_km", 300)
-    body.setdefault("map_node_id_chars", 2)
+    body.setdefault("node_id_chars", 2)
     try:
         body["map_path_max_km"] = max(10, int(body["map_path_max_km"]))
-        body["map_node_id_chars"] = max(2, min(6, int(body["map_node_id_chars"])))
+        body["node_id_chars"] = max(2, min(6, int(body["node_id_chars"])))
     except (ValueError, TypeError):
         body["map_path_max_km"] = 300
-        body["map_node_id_chars"] = 2
+        body["node_id_chars"] = 2
 
     # Preserve fields managed by other endpoints (e.g. ntfy toggle) that aren't in this payload
     existing = cfg.get_settings()

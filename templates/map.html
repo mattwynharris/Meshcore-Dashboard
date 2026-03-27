@@ -1323,7 +1323,7 @@
     .then(function(r) { return r.json(); })
     .then(function(s) {
       if (s.map_path_max_km) _mapPathMaxKm = s.map_path_max_km;
-      if (s.map_node_id_chars) _nodeIdChars = s.map_node_id_chars;
+      if (s.node_id_chars) _nodeIdChars = s.node_id_chars;
     })
     .catch(function() {})
     .finally(function() {

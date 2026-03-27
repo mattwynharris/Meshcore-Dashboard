@@ -330,6 +330,7 @@
     var _knownIds = new Set();
     var _paused = false;
     var _refreshInterval = null;
+    var _nodeIdChars = 2;  // loaded from settings
 
     function setFilter(type, btn) {
       _filter = type;
@@ -375,7 +376,7 @@
         var chip = document.createElement('span');
         var isNamed = hop.name && hop.name !== hop.id;
         chip.className = 'path-chip' + (isNamed ? ' path-chip-named' : '');
-        chip.textContent = hop.id;
+        chip.textContent = hop.id.substring(0, _nodeIdChars);
         if (isNamed) chip.title = hop.name;
         pathDiv.appendChild(chip);
       });
@@ -740,6 +741,10 @@
         if (added > 0) renderList();
       } catch (e) { /* network error — ignore */ }
     }
+
+    fetch('/api/settings').then(function(r) { return r.json(); }).then(function(s) {
+      if (s.node_id_chars) _nodeIdChars = s.node_id_chars;
+    }).catch(function() {});
 
     fetchPackets();
     _refreshInterval = setInterval(fetchPackets, 3000);

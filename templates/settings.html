@@ -116,8 +116,8 @@
           <input type="number" id="mapPathMaxKm" placeholder="300" min="10" max="5000" value="300">
         </div>
         <div class="settings-field settings-field-small">
-          <label for="mapNodeIdChars">Node ID depth</label>
-          <select id="mapNodeIdChars" style="height:2.2rem;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:0 0.5rem;font-family:inherit;font-size:0.9rem;">
+          <label for="nodeIdChars">Node ID depth</label>
+          <select id="nodeIdChars" style="height:2.2rem;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:0 0.5rem;font-family:inherit;font-size:0.9rem;">
             <option value="2">1 byte (2 chars)</option>
             <option value="4">2 bytes (4 chars)</option>
             <option value="6">3 bytes (6 chars)</option>
@@ -363,7 +363,7 @@
       var staggerDelay = document.getElementById('staggerDelay').value.trim();
       var lowBatPct = document.getElementById('lowBatteryPct').value.trim();
       var mapPathMaxKm = document.getElementById('mapPathMaxKm').value.trim();
-      var mapNodeIdChars = parseInt(document.getElementById('mapNodeIdChars').value) || 2;
+      var nodeIdChars = parseInt(document.getElementById('nodeIdChars').value) || 2;
 
       if (!host) { showStatus('Companion IP is required', true); return; }
 
@@ -411,7 +411,7 @@
         stale_threshold_seconds: 900,
         low_battery_percent: parseInt(lowBatPct) || 20,
         map_path_max_km: parseInt(mapPathMaxKm) || 300,
-        map_node_id_chars: mapNodeIdChars,
+        node_id_chars: nodeIdChars,
         ntfy_topic: ntfyTopic,
         ntfy_server: ntfyServer || "https://ntfy.sh",
         dashboard_url: dashboardUrl
@@ -514,7 +514,7 @@
           document.getElementById('staggerDelay').value = s.stagger_delay_seconds || 30;
           document.getElementById('lowBatteryPct').value = s.low_battery_percent || 20;
           document.getElementById('mapPathMaxKm').value = s.map_path_max_km || 300;
-          document.getElementById('mapNodeIdChars').value = s.map_node_id_chars || 2;
+          document.getElementById('nodeIdChars').value = s.node_id_chars || 2;
           document.getElementById('ntfyTopic').value = s.ntfy_topic || '';
           document.getElementById('ntfyServer').value = s.ntfy_server || 'https://ntfy.sh';
           document.getElementById('dashboardUrl').value = s.dashboard_url || '';

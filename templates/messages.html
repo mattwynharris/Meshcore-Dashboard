@@ -421,6 +421,7 @@
     var _contactRoutes = {};     // pubkey-prefix -> {hops, route_path, name}
     var _nodeNames = {};         // 2-char hex ID -> name (from node_names cache)
     var _cachedRoutes = {};      // pubkey_prefix (upper) -> {hops, path} from contact-routes cache
+    var _nodeIdChars = 2;        // loaded from settings
 
     // --- Utilities ---
 
@@ -488,7 +489,7 @@
     function makeNode(hexStr) {
       var el = document.createElement('span');
       el.className = 'route-node';
-      el.textContent = hexStr.toUpperCase();
+      el.textContent = hexStr.substring(0, _nodeIdChars).toUpperCase();
       // Try node_names cache first (2-char hex ID → name)
       var nodeName = _nodeNames[hexStr.toUpperCase()] || _nodeNames[hexStr.toLowerCase()];
       if (!nodeName) {
@@ -722,7 +723,7 @@
         item.className = 'msg-item ' + (isOut ? 'outgoing' : 'incoming');
 
         if (!isOut) {
-          var senderName = m.sender_name || (m.sender_pubkey ? m.sender_pubkey.substring(0, 8) : 'Unknown');
+          var senderName = m.sender_name || (m.sender_pubkey ? m.sender_pubkey.substring(0, _nodeIdChars) : 'Unknown');
           // Channel messages have no sender_pubkey — the real sender's name is
           // embedded in the text as "Name: message text". Extract it.
           var displayName = senderName;
@@ -885,6 +886,10 @@
     // --- Auto-resize textarea + keyboard shortcuts ---
 
     document.addEventListener('DOMContentLoaded', function() {
+      fetch('/api/settings').then(function(r) { return r.json(); }).then(function(s) {
+        if (s.node_id_chars) _nodeIdChars = s.node_id_chars;
+      }).catch(function() {});
+
       var input = document.getElementById('msgInput');
 
       input.addEventListener('input', function() {
