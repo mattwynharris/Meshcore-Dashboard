@@ -120,6 +120,26 @@ async def get_contact_routes():
     return {k: {"hops": v[0], "path": v[1]} for k, v in poller._contact_routes.items()}
 
 
+@app.get("/api/message-paths")
+async def get_message_paths():
+    """Return recent received messages that have path info, for map display."""
+    messages = store.get_messages(hours=48, limit=500)
+    seen = set()
+    result = []
+    for m in messages:
+        if m["direction"] == "in" and m.get("path") and m.get("sender_pubkey"):
+            key = (m["sender_pubkey"][:4].lower(), m["path"])
+            if key not in seen:
+                seen.add(key)
+                result.append({
+                    "sender_pubkey": m["sender_pubkey"],
+                    "sender_name": m["sender_name"],
+                    "path": m["path"],
+                    "hops": m["hops"],
+                })
+    return result
+
+
 @app.get("/api/map")
 async def get_map_data():
     """Return repeater data optimised for the map page, including home node location."""
@@ -339,6 +359,16 @@ async def save_settings(request: Request):
         body["log_retention_hours"] = max(1, int(body["log_retention_hours"]))
     except (ValueError, TypeError):
         body["log_retention_hours"] = 24
+
+    # Map settings
+    body.setdefault("map_path_max_km", 300)
+    body.setdefault("map_node_id_chars", 2)
+    try:
+        body["map_path_max_km"] = max(10, int(body["map_path_max_km"]))
+        body["map_node_id_chars"] = max(2, min(6, int(body["map_node_id_chars"])))
+    except (ValueError, TypeError):
+        body["map_path_max_km"] = 300
+        body["map_node_id_chars"] = 2
 
     # Preserve fields managed by other endpoints (e.g. ntfy toggle) that aren't in this payload
     existing = cfg.get_settings()

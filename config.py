@@ -25,6 +25,8 @@ _DEFAULTS = {
     "stale_threshold_seconds": 900,
     "low_battery_percent": 20,
     "log_retention_hours": 24,
+    "map_path_max_km": 300,
+    "map_node_id_chars": 2,
     "channels": [
         {"name": "Primary", "idx": 0},
     ],

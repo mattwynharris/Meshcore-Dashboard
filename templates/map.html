@@ -269,6 +269,8 @@
       <div class="legend-row" style="font-size:0.68rem;color:#64748b;margin-top:0.25rem;">Paths layer</div>
       <div class="legend-row"><div class="legend-dot" style="background:#34d399;border-radius:2px"></div> Single route</div>
       <div class="legend-row"><div class="legend-dot" style="background:#f59e0b;border-radius:2px"></div> Shared segment</div>
+      <div class="legend-row" style="font-size:0.68rem;color:#64748b;margin-top:0.25rem;">Msg paths layer</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#a78bfa;border-radius:2px"></div> Message path</div>
     </div>
 
     <!-- Top-right button bar -->
@@ -276,6 +278,7 @@
       <button class="map-sethome-btn" id="setHomeBtn" onclick="togglePickHome()">&#8962; Set Home</button>
       <button class="map-contacts-btn" id="contactsBtn" onclick="toggleAllContacts()">&#9788; All Contacts</button>
       <button class="map-paths-btn" id="pathsBtn" onclick="togglePaths()">&#8627; Paths</button>
+      <button class="map-paths-btn" id="msgPathsBtn" onclick="toggleMsgPaths()">&#9993; Msg Paths</button>
       <button class="map-refresh-btn" onclick="loadMap()">Refresh</button>
     </div>
 
@@ -330,12 +333,16 @@
   var _contactsLayer = L.layerGroup().addTo(map);  // layer for "show all contacts" mode
   var _advertLayer = L.layerGroup().addTo(map);    // always-on layer for advert-discovered nodes
   var _pathsLayer = L.layerGroup().addTo(map);     // layer for "show all paths" toggle
+  var _msgPathsLayer = L.layerGroup().addTo(map);  // layer for message paths toggle
   var _showingAllContacts = false;    // toggle state
   var _showingPaths = false;          // paths toggle state
+  var _showingMsgPaths = false;       // message paths toggle state
   var _highlightedRepeater = null;    // pubkey of repeater whose path is isolated (null = show all)
   var _pathsStateBeforeHighlight = false; // saved _showingPaths before a repeater was clicked
   var _allContactsData = [];          // latest contacts array from /api/map
-  var _allNodeLatLng = {};            // 2-char pubkey prefix (lower) -> {lat, lon, name}
+  var _allNodeLatLng = {};            // pubkey prefix (lower) -> {lat, lon, name}
+  var _mapPathMaxKm = 300;            // loaded from settings — max km per path segment
+  var _nodeIdChars = 2;               // loaded from settings — hex chars used for node keys
 
   // Distinct colours for each node's ring and line (status shown separately as fill)
   var NODE_PALETTE = [
@@ -521,8 +528,9 @@
     // Rebuild node lat/lon lookup (used by paths layer)
     rebuildAllNodeLatLng(data);
 
-    // Refresh paths layer if it's currently on
+    // Refresh paths layers if currently on
     if (_showingPaths) renderPathsLayer();
+    if (_showingMsgPaths) renderMsgPathsLayer();
 
     // --- Home/gateway marker ---
     if (home.lat && home.lon) {
@@ -1003,27 +1011,30 @@
     if (home.lat && home.lon) {
       _allNodeLatLng['__home__'] = { lat: home.lat, lon: home.lon, name: home.name || 'Gateway' };
     }
+    // Helper: index a node by both 2-char (for path lookups) and _nodeIdChars (for disambiguation)
+    function _indexNode(pubkey, lat, lon, name) {
+      var p2 = pubkey.substring(0, 2).toLowerCase();
+      var pN = pubkey.substring(0, _nodeIdChars).toLowerCase();
+      var entry = { lat: lat, lon: lon, name: name || p2 };
+      _allNodeLatLng[p2] = entry;
+      if (pN !== p2) _allNodeLatLng[pN] = entry;
+    }
     // Configured repeaters
     (data.repeaters || []).forEach(function(r) {
       if (!r.lat || !r.lon || !r.pubkey) return;
-      var prefix = r.pubkey.substring(0, 2).toLowerCase();
-      _allNodeLatLng[prefix] = { lat: r.lat, lon: r.lon, name: r.name || prefix };
+      _indexNode(r.pubkey, r.lat, r.lon, r.name);
     });
     // All contacts (includes non-configured ones)
     (data.contacts || []).forEach(function(c) {
       if (!c.lat || !c.lon || !c.pubkey) return;
-      var prefix = c.pubkey.substring(0, 2).toLowerCase();
-      if (!_allNodeLatLng[prefix]) {
-        _allNodeLatLng[prefix] = { lat: c.lat, lon: c.lon, name: c.name || prefix };
-      }
+      var p2 = c.pubkey.substring(0, 2).toLowerCase();
+      if (!_allNodeLatLng[p2]) _indexNode(c.pubkey, c.lat, c.lon, c.name);
     });
     // Advert-discovered nodes (may have GPS decoded from beacon payload)
     (data.advert_nodes || []).forEach(function(n) {
       if (!n.lat || !n.lon || !n.pubkey) return;
-      var prefix = n.pubkey.substring(0, 2).toLowerCase();
-      if (!_allNodeLatLng[prefix]) {
-        _allNodeLatLng[prefix] = { lat: n.lat, lon: n.lon, name: n.name || prefix };
-      }
+      var p2 = n.pubkey.substring(0, 2).toLowerCase();
+      if (!_allNodeLatLng[p2]) _indexNode(n.pubkey, n.lat, n.lon, n.name);
     });
   }
 
@@ -1067,7 +1078,7 @@
     if (latlngs.length < 2) return;
     for (var i = 0; i < latlngs.length - 1; i++) {
       var a = latlngs[i], b = latlngs[i + 1];
-      if (_haversineKm(a, b) > 300) continue;  // skip unrealistic direct hops
+      if (_haversineKm(a, b) > _mapPathMaxKm) continue;  // skip unrealistic direct hops
       var ka = a[0] + ',' + a[1], kb = b[0] + ',' + b[1];
       var key = ka < kb ? (ka + '|' + kb) : (kb + '|' + ka);
       if (!segCounts[key]) {
@@ -1124,7 +1135,7 @@
             if (homeNode) latlngs.push([homeNode.lat, homeNode.lon]);
             if (r.route_path) {
               r.route_path.replace(/\s/g, '').split('>').forEach(function(seg) {
-                var node = _allNodeLatLng[seg.toLowerCase()];
+                var node = _allNodeLatLng[seg.substring(0, _nodeIdChars).toLowerCase()] || _allNodeLatLng[seg.substring(0, 2).toLowerCase()];
                 if (node) latlngs.push([node.lat, node.lon]);
               });
             }
@@ -1139,11 +1150,12 @@
         // --- Source 2: contact-routes (discovered via PATH_RESPONSE / adverts) ---
         Object.keys(routes).forEach(function(prefix) {
           var entry = routes[prefix];
-          // Keys can be 2 or 4 chars (uppercase) — always look up by first 2 chars
+          // Look up destination by _nodeIdChars first, fall back to 2-char
+          var preN = prefix.substring(0, _nodeIdChars).toLowerCase();
           var pre2 = prefix.substring(0, 2).toLowerCase();
           // Skip destinations that are our own configured repeaters (Source 1 handles them)
           if (myPrefixes[pre2]) return;
-          var dest = _allNodeLatLng[pre2];
+          var dest = _allNodeLatLng[preN] || _allNodeLatLng[pre2];
           if (!dest) return;
           if (filterPk && !_pathInvolvesRepeater(prefix, entry.path || '', filterPk)) return;
 
@@ -1153,7 +1165,7 @@
           var pathStr = entry.path || '';
           if (pathStr) {
             pathStr.replace(/\s/g, '').split('>').forEach(function(seg) {
-              var node = _allNodeLatLng[seg.toLowerCase()];
+              var node = _allNodeLatLng[seg.substring(0, _nodeIdChars).toLowerCase()] || _allNodeLatLng[seg.substring(0, 2).toLowerCase()];
               if (node) latlngs.push([node.lat, node.lon]);
             });
           }
@@ -1184,6 +1196,66 @@
           line.bindTooltip(count + ' path' + (count !== 1 ? 's' : '') + ': ' + tip,
             { sticky: true, className: 'map-label' });
           _pathsLayer.addLayer(line);
+        });
+      })
+      .catch(function() {});
+  }
+
+  function toggleMsgPaths() {
+    _showingMsgPaths = !_showingMsgPaths;
+    var btn = document.getElementById('msgPathsBtn');
+    if (_showingMsgPaths) {
+      btn.classList.add('active');
+      renderMsgPathsLayer();
+    } else {
+      btn.classList.remove('active');
+      _msgPathsLayer.clearLayers();
+    }
+  }
+
+  function renderMsgPathsLayer() {
+    _msgPathsLayer.clearLayers();
+    fetch('/api/message-paths')
+      .then(function(r) { return r.json(); })
+      .then(function(msgs) {
+        var homeNode = _allNodeLatLng['__home__'];
+        var segCounts = {};
+        var segLatLng = {};
+        var segLabels = {};
+
+        msgs.forEach(function(m) {
+          var pre2 = (m.sender_pubkey || '').substring(0, 2).toLowerCase();
+          var preN = (m.sender_pubkey || '').substring(0, _nodeIdChars).toLowerCase();
+          var sender = _allNodeLatLng[preN] || _allNodeLatLng[pre2];
+          if (!sender) return;
+
+          var latlngs = [[sender.lat, sender.lon]];
+          if (m.path) {
+            m.path.replace(/\s/g, '').split('>').forEach(function(seg) {
+              var node = _allNodeLatLng[seg.substring(0, _nodeIdChars).toLowerCase()] || _allNodeLatLng[seg.substring(0, 2).toLowerCase()];
+              if (node) latlngs.push([node.lat, node.lon]);
+            });
+          }
+          if (homeNode) latlngs.push([homeNode.lat, homeNode.lon]);
+          if (latlngs.length < 2) return;
+
+          var hops = m.hops >= 0 ? m.hops : '?';
+          var label = (m.sender_name || pre2) + ' (' + hops + (hops !== '?' ? ' hop' + (hops !== 1 ? 's' : '') : '') + ')';
+          _addPathToSegments(latlngs, label, segCounts, segLatLng, segLabels);
+        });
+
+        Object.keys(segCounts).forEach(function(key) {
+          var count = segCounts[key];
+          var tip = segLabels[key].join(', ');
+          var line = L.polyline(segLatLng[key], {
+            color: '#a78bfa',
+            weight: 2,
+            opacity: 0.75,
+            dashArray: count > 1 ? null : '6 4'
+          });
+          line.bindTooltip(count + ' message' + (count !== 1 ? 's' : '') + ': ' + tip,
+            { sticky: true, className: 'map-label' });
+          _msgPathsLayer.addLayer(line);
         });
       })
       .catch(function() {});
@@ -1246,9 +1318,19 @@
       .catch(function() {});
   });
 
-  // Initial load + auto-refresh every 10s
-  loadNodeNames();
-  loadMap();
+  // Load map settings (range filter, node ID depth) then start
+  fetch('/api/settings')
+    .then(function(r) { return r.json(); })
+    .then(function(s) {
+      if (s.map_path_max_km) _mapPathMaxKm = s.map_path_max_km;
+      if (s.map_node_id_chars) _nodeIdChars = s.map_node_id_chars;
+    })
+    .catch(function() {})
+    .finally(function() {
+      loadNodeNames();
+      loadMap();
+    });
+
   setInterval(loadMap, 10000);
   setInterval(loadNodeNames, 30000);
 </script>
