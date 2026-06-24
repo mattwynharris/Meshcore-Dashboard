@@ -1,90 +1,136 @@
-# MeshCore Repeater Dashboard
+# MeshCore Dashboard
 
-A self-hosted web dashboard for monitoring MeshCore LoRa repeaters and contacts via a companion WiFi node.
+A self-hosted web dashboard for monitoring MeshCore LoRa repeaters, contacts, and messages via a WiFi companion node.
 
-**Requirement:** You need a MeshCore WiFi companion node running and accessible on your network. The companion node must have TCP enabled — it listens on port **5000** by default.
+> **Requirement:** A MeshCore WiFi companion node on your network with TCP enabled (default port **5000**).
+
+---
+
+<img width="1440" alt="Dashboard" src="https://github.com/user-attachments/assets/a0aacd82-5f93-4eec-a61f-1dbf62895e44" />
+<img width="1430" alt="Map" src="https://github.com/user-attachments/assets/5c57ad33-fe68-4ddb-b409-cd4b2faed2c9" />
+
+---
 
 ## Features
 
-- **Dashboard** — live battery, signal (RSSI/SNR), uptime, and hop count for each configured repeater; historical charts
-- **Map** — plots repeaters, contacts, and advertising nodes on a live Leaflet map
-  - Network path overlay showing routes through actual hops (teal = single route, amber = shared/merged segment)
-  - Click a repeater to isolate and highlight only its paths; click off to restore prior state
-  - 300 km sanity filter — no misleading straight lines for unknown paths
-- **Messages** — channel and direct message log from the companion node
-- **Packets** — raw RX log / packet feed
+- **Dashboard** — live battery, RSSI/SNR, uptime, and hop count per repeater; 6 configurable stat tiles; historical charts
+- **Map** — live Leaflet map with repeaters, contacts, and advertising nodes; network path overlay showing routes through hops
+- **Messages** — channel list with unread badges; tap a channel to open the conversation
+- **Packets** — raw RX packet feed with filters
+- **Contacts** — full contact list with sortable columns
 - **Logs** — app and poller activity log
-- **Settings** — configure companion IP, repeater list (name, pubkey, admin password), poll timing, and software updates
-
-
----
-<img width="1440" height="669" alt="Screenshot 2026-03-26 at 9 15 12 PM" src="https://github.com/user-attachments/assets/a0aacd82-5f93-4eec-a61f-1dbf62895e44" />
-<img width="1430" height="761" alt="Screenshot 2026-03-26 at 9 15 55 PM" src="https://github.com/user-attachments/assets/5c57ad33-fe68-4ddb-b409-cd4b2faed2c9" />
-<img width="1431" height="743" alt="Screenshot 2026-03-26 at 9 22 50 PM" src="https://github.com/user-attachments/assets/2b611ffe-5f00-4e1b-9a40-574e7a72d9df" />
+- **Settings** — companion IP, repeater list, poll timing, alert thresholds, dashboard appearance, and software updates
 
 ---
-## VM Requirement 
-- Guest OS Ubuntu Linux (64-bit)
-- Compatibility ESXi 7.0 U2 virtual machine
-- VMware Tools Yes
-- CPUs 2
-- Memory 2 GB
 
----
 ## Installation
 
-### 1. Set Up VM and Install Docker on your device
-Set up your VM OS Ubuntu Linux 
-then SSH in to your VM 
+### Option 1 — Docker (recommended)
+
+Works on any Linux server, VM, NAS, or Raspberry Pi with Docker installed.
+
+**1. Install Docker**
 
 ```bash
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
 ```
-> Log out and back in before continuing.
+> Log out and back in after running this.
 
-### 2. Clone the repo and run setup
+**2. Create a folder and download the compose file**
+
+```bash
+mkdir meshcore-dashboard && cd meshcore-dashboard
+mkdir -p data
+curl -O https://raw.githubusercontent.com/mattwynharris/Meshcore-Dashboard/main/docker-compose.yml
+```
+
+**3. Start the dashboard**
+
+```bash
+docker compose up -d
+```
+
+Docker pulls the image automatically — no building required. Open `http://<your-device-ip>:8080` in a browser.
+
+---
+
+### Option 2 — VM (ESXi / Proxmox / Hyper-V)
+
+Recommended specs:
+- **OS:** Ubuntu Server 24.04 LTS (64-bit)
+- **CPU:** 2 cores
+- **RAM:** 2 GB
+- **Disk:** 10 GB
+
+SSH into the VM, then follow the Docker steps above.
+
+---
+
+### Option 3 — Raspberry Pi
+
+Any Pi model 3 or newer running Raspberry Pi OS (64-bit recommended).
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+```
+
+Log out and back in, then follow the Docker steps above.
+
+---
+
+### Option 4 — Manual (Python, no Docker)
 
 ```bash
 git clone https://github.com/mattwynharris/Meshcore-Dashboard.git
 cd Meshcore-Dashboard
-bash install.sh
+pip install -r requirements.txt
+uvicorn app:app --host 0.0.0.0 --port 8080
 ```
-
-The script builds the Docker image and starts the dashboard. It prints the URL when done.
-
-### 3. Open the dashboard and configure it
-
-> **Requirement:** You need a MeshCore WiFi companion node running and accessible on your network. The companion node must have TCP enabled — it listens on port **5000** by default.
-
-Go to `http://<device-ip>:8080`, click the **⚙ Settings** icon and enter:
-
-- Companion device IP address and port *(default port: 5000)*
-- Each repeater — name, public key, and admin password
-- Click **Save & Apply**
-
-The dashboard starts polling your repeaters straight away.
 
 ---
 
-## Applying Updates
+## First-time Setup
 
-No SSH needed — updates are applied through the dashboard UI.
+1. Open `http://<device-ip>:8080`
+2. Click **⚙ Settings**
+3. Under **Companion Device** — enter your companion node IP and port (default `5000`)
+4. Under **Repeaters** — add each repeater with its name, public key, and admin password
+5. Click **Save & Apply**
+
+The dashboard starts polling your repeaters immediately.
+
+---
+
+## Updating
+
+### Docker users
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+This pulls the latest image and restarts the container. Your data is kept.
+
+### Web update (zip)
 
 1. Download the latest `meshcore-dashboard-update-VX.X.zip` from the [Releases page](https://github.com/mattwynharris/Meshcore-Dashboard/releases)
-2. Open **Settings** → scroll to **Software Update**
-3. Click **Choose .zip…** → select the downloaded zip → click **Upload & Apply**
-4. Click **Restart Now** — the page reloads automatically
+2. Open **Settings → Update**
+3. Click **Choose .zip…** → select the zip → **Upload & Apply**
+4. The dashboard restarts automatically
 
 ---
 
 ## Useful Commands
 
 ```bash
-docker compose logs -f      # live logs
-docker compose restart      # restart the container
-docker compose down         # stop
-docker compose up -d        # start (e.g. after a reboot)
+docker compose logs -f        # live logs
+docker compose restart        # restart
+docker compose down           # stop
+docker compose up -d          # start
+docker compose pull           # pull latest image
 ```
 
 The container starts automatically on reboot.
@@ -93,11 +139,21 @@ The container starts automatically on reboot.
 
 ## Data
 
-Everything is stored in `~/meshcore-dashboard/data/` on the host — outside the container — so it survives updates and restarts:
+Stored in `./data/` on the host — survives updates and restarts:
 
-- `data/settings.json` — companion IP, repeater list, poll timing
-- `data/repeater_history.db` — telemetry history, activity logs, contact routes
+| File | Contents |
+|------|----------|
+| `data/settings.json` | Companion IP, repeater list, poll timing, thresholds |
+| `data/repeater_history.db` | Telemetry history, logs, messages, contact routes |
 
 ---
 
-*This project is an independent, community-built tool and is not affiliated with, endorsed by, or officially connected to MeshCore or its developers.*
+## Docker Image
+
+`docker pull mattwh/meshcore-dashboard:latest`
+
+Available on [Docker Hub](https://hub.docker.com/r/mattwh/meshcore-dashboard) — built for **linux/amd64** and **linux/arm64**.
+
+---
+
+*This is an independent community-built tool and is not affiliated with or endorsed by MeshCore or its developers.*
