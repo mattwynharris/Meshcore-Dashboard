@@ -11,6 +11,37 @@ A self-hosted web dashboard for monitoring MeshCore LoRa repeaters, contacts, an
 
 ---
 
+## What's New in v2.0
+
+### Messages — Channel List
+Messages now opens as a list of all your channels, each showing the last message preview and a red unread count badge. Tap a channel to open the conversation. Back button returns to the list.
+
+### Configurable Dashboard Tiles
+The 6 stat tiles on the dashboard are now fully customisable. Go to **Settings → Appearance** and tap any tile slot to pick what it shows. 10 stats to choose from: Packets, Nodes, Active 24h, Routes, Active Repeaters, Total Repeaters, New Nodes, Messages, Alerts, and Avg RSSI.
+
+### Alerts Detail
+Clicking the Active Alerts tile now opens a panel showing exactly what each alert is — battery level, temperature, noise floor, or clock drift — with icons and repeater names.
+
+### Settings Accordion
+Settings is now organised into 4 collapsible sections: **Companion Device**, **Repeaters**, **Appearance**, and **Update**. Tap a section header to expand it; the rest collapse automatically.
+
+### Mobile Layout
+The stats row is now a **3×2 grid on phones** instead of a cramped single row of 6. Nav buttons are evenly spaced and consistent across all pages.
+
+### Contacts Page
+New dedicated Contacts page with sortable columns showing all nodes seen by your companion.
+
+### Docker Hub
+Official Docker image published at `mattwh/meshcore-dashboard` — no building required. Update with a single `docker compose pull`.
+
+### Navigation Consistency
+All 7 pages share the same navigation bar in the same order. The active page is highlighted automatically.
+
+### Cross-Tab Sync
+Change settings or read messages in one browser tab — other open tabs update their tiles and unread badges automatically.
+
+---
+
 ## Features
 
 - **Dashboard** — live battery, RSSI/SNR, uptime, and hop count per repeater; 6 configurable stat tiles; historical charts
