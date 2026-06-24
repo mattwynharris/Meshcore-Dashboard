@@ -17,6 +17,8 @@ import config as cfg
 from data_store import DataStore
 from meshcore_poller import MeshcorePoller
 
+APP_VERSION = "2.0"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -25,6 +27,7 @@ logger = logging.getLogger("app")
 
 BASE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+templates.env.globals["v"] = APP_VERSION  # cache-busting query string for static assets
 store = DataStore()
 poller = MeshcorePoller(store)
 
@@ -69,9 +72,8 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 # --- Dashboard ---
 
 @app.get("/", response_class=HTMLResponse)
-async def index():
-    html_path = BASE_DIR / "templates" / "dashboard.html"
-    return html_path.read_text()
+async def index(request: Request):
+    return templates.TemplateResponse(request, "dashboard.html")
 
 
 @app.get("/logs", response_class=HTMLResponse)
@@ -99,6 +101,132 @@ async def packets_page(request: Request):
     return templates.TemplateResponse(request, "packets.html")
 
 
+@app.get("/contacts", response_class=HTMLResponse)
+async def contacts_page(request: Request):
+    return templates.TemplateResponse(request, "contacts.html")
+
+
+def _sanitise_gps(lat, lon):
+    """Return (lat, lon) ensuring valid ranges. Swaps if clearly reversed, zeros if invalid."""
+    try:
+        lat, lon = float(lat or 0), float(lon or 0)
+    except (TypeError, ValueError):
+        return 0.0, 0.0
+    if lat == 0.0 and lon == 0.0:
+        return 0.0, 0.0
+    # Detect swapped: lat outside ±90 but lon would be valid if swapped
+    if abs(lat) > 90 and abs(lon) <= 90:
+        lat, lon = lon, lat
+    # Still invalid → discard
+    if abs(lat) > 90 or abs(lon) > 180:
+        return 0.0, 0.0
+    return round(lat, 6), round(lon, 6)
+
+
+@app.get("/api/contacts-list")
+async def get_contacts_list():
+    """Return merged contacts: configured repeaters, mesh contacts, advert nodes."""
+    import time as _time
+    merged = {}  # pubkey_lower -> entry
+
+    # 1. Configured repeaters
+    for r in store.get_all():
+        pk = (r.get("pubkey") or "").lower().strip()
+        if not pk:
+            continue
+        rlat, rlon = _sanitise_gps(r.get("lat"), r.get("lon"))
+        merged[pk] = {
+            "pubkey": pk,
+            "name": r.get("name") or pk[:8],
+            "lat": rlat,
+            "lon": rlon,
+            "hops": r.get("hops", -1),
+            "route_path": r.get("route_path") or "",
+            "last_seen": r.get("last_seen"),
+            "type": "Repeater",
+        }
+
+    # 2. Mesh contacts from poller (includes routing + GPS)
+    for c in poller.get_mesh_contacts():
+        pk = (c.get("pubkey") or "").lower().strip()
+        if not pk:
+            continue
+        clat, clon = _sanitise_gps(c.get("lat"), c.get("lon"))
+        existing = merged.get(pk)
+        if existing:
+            if c.get("hops", -1) >= 0:
+                existing["hops"] = c["hops"]
+                if c.get("route_path"):
+                    existing["route_path"] = c["route_path"]
+            if clat:
+                existing["lat"] = clat
+            if clon:
+                existing["lon"] = clon
+            if c.get("last_seen"):
+                existing["last_seen"] = c["last_seen"]
+        else:
+            merged[pk] = {
+                "pubkey": pk,
+                "name": c.get("name") or pk[:8],
+                "lat": clat,
+                "lon": clon,
+                "hops": c.get("hops", -1),
+                "route_path": c.get("route_path") or "",
+                "last_seen": c.get("last_seen"),
+                "type": "Contact",
+            }
+
+    # 3. Advert nodes (GPS beacons seen over the air)
+    for a in store.get_advert_nodes():
+        pk = (a.get("pubkey") or "").lower().strip()
+        if not pk:
+            continue
+        alat, alon = _sanitise_gps(a.get("lat"), a.get("lon"))
+        if pk in merged:
+            existing = merged[pk]
+            if alat:
+                existing["lat"] = alat
+            if alon:
+                existing["lon"] = alon
+            if a.get("name") and not existing["name"]:
+                existing["name"] = a["name"]
+            if a.get("last_seen") and (not existing["last_seen"] or a["last_seen"] > existing["last_seen"]):
+                existing["last_seen"] = a["last_seen"]
+        else:
+            merged[pk] = {
+                "pubkey": pk,
+                "name": a.get("name") or pk[:8],
+                "lat": alat,
+                "lon": alon,
+                "hops": -1,
+                "route_path": "",
+                "last_seen": a.get("last_seen"),
+                "type": "Advert",
+            }
+
+    result = sorted(merged.values(), key=lambda x: x.get("last_seen") or 0, reverse=True)
+    return result
+
+
+@app.delete("/api/contacts-list")
+async def delete_contacts(request: Request):
+    """Delete one or more contacts by pubkey. Body: {"pubkeys": ["aa", "bb", ...]}"""
+    body = await request.json()
+    pubkeys = body.get("pubkeys", [])
+    if not pubkeys:
+        return {"ok": False, "error": "No pubkeys provided"}
+    for pk in pubkeys:
+        pk = pk.lower().strip()
+        if not pk:
+            continue
+        # Remove from mesh contacts (poller in-memory)
+        poller.remove_contact(pk)
+        # Remove from advert nodes (DB)
+        store.delete_advert_node(pk)
+        # Note: configured repeaters are managed via settings, not deleted here
+    return {"ok": True, "deleted": len(pubkeys)}
+
+
 # --- Repeater Data API ---
 
 @app.get("/api/repeaters")
@@ -112,12 +240,55 @@ async def get_node_names():
     return poller._node_id_name_cache if poller else {}
 
 
+@app.post("/api/contacts/reset")
+async def reset_contacts():
+    """Clear all contacts: in-memory dict, route cache, advert_nodes DB, and repeater route paths."""
+    if not poller:
+        return {"ok": False, "error": "Not connected"}
+    poller._contacts.clear()
+    poller._contact_routes.clear()
+    store.clear_all_advert_nodes()
+    store.clear_all_routes()
+    return {"ok": True}
+
+
+@app.post("/api/contact-routes/reset")
+async def reset_contact_routes():
+    """Clear all known paths so they re-learn from scratch."""
+    if not poller:
+        return {"ok": False, "error": "Not connected"}
+    poller._contact_routes.clear()
+    poller._suppress_sdk_paths = True
+    store.clear_all_routes()
+    return {"ok": True}
+
+
 @app.get("/api/contact-routes")
 async def get_contact_routes():
-    """Return cached contact routes (pubkey_prefix → {hops, path}) for all contacts."""
+    """Return all known routes: PATH_RESPONSE cache merged with contacts' own out_path data."""
     if not poller:
         return {}
-    return {k: {"hops": v[0], "path": v[1]} for k, v in poller._contact_routes.items()}
+    # Start with PATH_RESPONSE cache — skip entries older than ROUTE_TTL_SECONDS
+    import time as _time
+    _now = _time.time()
+    routes = {
+        k: {"hops": v[0], "path": v[1]}
+        for k, v in poller._contact_routes.items()
+        if (_now - (v[2] if len(v) > 2 else 0)) < poller.ROUTE_TTL_SECONDS
+    }
+    # Merge in route_path from every contact that has one — contacts win if they have a richer path
+    for c in poller.get_mesh_contacts():
+        pk = (c.get("pubkey") or "").strip()
+        rp = (c.get("route_path") or "").strip()
+        hops = c.get("hops", -1)
+        if not pk or not rp:
+            continue
+        key = pk[:4].upper()  # use 4-char prefix as key (matches _contact_routes convention)
+        existing = routes.get(key)
+        # Prefer the entry with the longer/more-detailed path
+        if not existing or len(rp) > len(existing.get("path", "")):
+            routes[key] = {"hops": hops, "path": rp}
+    return routes
 
 
 @app.get("/api/message-paths")
@@ -200,6 +371,11 @@ async def get_history(pubkey: str, hours: int = 24):
     return store.get_history(pubkey, hours)
 
 
+@app.get("/api/poll-history/{pubkey}")
+async def get_poll_history(pubkey: str, hours: int = 24):
+    return store.get_poll_history(pubkey, hours)
+
+
 @app.get("/api/logs")
 async def get_logs(hours: int = 24, level: str = None, search: str = None, limit: int = 500):
     """Return recent activity logs, optionally filtered by level and/or message text."""
@@ -245,7 +421,15 @@ async def get_connection():
         result["battery_mv"] = bat
     result["polling_enabled"] = poller._polling_enabled
     result["last_connected"] = poller._last_connected_ts
+    result["connected_since"] = poller._connected_since_ts
+    result["app_version"] = APP_VERSION
     return result
+
+
+@app.get("/api/companion/history")
+async def get_companion_history(hours: int = 24):
+    """Return battery history for the companion WiFi node."""
+    return store.get_companion_history(hours)
 
 
 @app.post("/api/polling/toggle")
@@ -253,6 +437,34 @@ async def toggle_polling():
     """Toggle duty-cycle repeater polling on or off."""
     enabled = poller.toggle_polling()
     return {"ok": True, "polling_enabled": enabled}
+
+
+@app.post("/api/device/reboot")
+async def reboot_device():
+    """Send reboot command to the companion device."""
+    return await poller.reboot_device()
+
+
+@app.get("/api/device/node-id-mode")
+async def get_node_id_mode():
+    """Read current path_hash_mode from the companion device."""
+    return await poller.get_node_id_mode()
+
+
+@app.post("/api/device/node-id-mode")
+async def set_node_id_mode(request: Request):
+    """Set path_hash_mode on the companion device and sync node_id_chars in config."""
+    body = await request.json()
+    mode = int(body.get("mode", 0))
+    mode = max(0, min(2, mode))
+    result = await poller.set_node_id_mode(mode)
+    if result.get("ok"):
+        # Sync display depth to match: mode 0=2chars, mode 1=4chars, mode 2=6chars
+        chars = (mode + 1) * 2
+        settings = cfg.get_settings()
+        settings["node_id_chars"] = chars
+        cfg.save_settings(settings)
+    return result
 
 
 @app.post("/api/disconnect")
@@ -277,6 +489,49 @@ async def connect_companion():
 async def get_packets(limit: int = 100):
     """Return recent mesh packet events (messages, ACKs, path updates)."""
     return poller.get_recent_events(limit=limit)
+
+
+@app.get("/api/network-stats")
+async def get_network_stats():
+    """Aggregated mesh stats for the dashboard summary row."""
+    import time as _t
+    now = _t.time()
+
+    packets_1h = 0
+    routes_known = 0
+    if poller:
+        packets_1h = sum(1 for e in poller.get_recent_events(limit=200) if e.get("ts", 0) > now - 3600)
+        routes_known = sum(
+            1 for _, v in poller._contact_routes.items()
+            if (now - (v[2] if len(v) > 2 else 0)) < poller.ROUTE_TTL_SECONDS
+        )
+
+    all_nodes = store.get_advert_nodes()
+    nodes_24h = sum(1 for n in all_nodes if (n.get("last_seen") or 0) > now - 86400)
+    nodes_list = [n for n in all_nodes if (n.get("last_seen") or 0) > now - 86400]
+
+    # New nodes = first heard within last 24 h (first_seen set once on INSERT)
+    new_nodes = sorted(
+        [n for n in all_nodes if (n.get("first_seen") or 0) > now - 86400],
+        key=lambda n: n.get("first_seen", 0),
+        reverse=True,
+    )
+
+    all_reps = store.get_all()
+    online = sum(1 for r in all_reps if r.get("poll_ok") is True)
+    messages_24h = store.count_messages(hours=24)
+
+    return {
+        "packets_1h": packets_1h,
+        "nodes_total": len(all_nodes),
+        "nodes_24h": nodes_24h,
+        "nodes_list": nodes_list,
+        "new_nodes": new_nodes,
+        "routes_known": routes_known,
+        "repeaters_online": online,
+        "repeaters_total": len(all_reps),
+        "messages_24h": messages_24h,
+    }
 
 
 @app.get("/api/messages")
@@ -422,6 +677,49 @@ async def ping_repeater(pubkey: str):
 async def send_advert(pubkey: str):
     """Login to a repeater and trigger it to broadcast a flood advertisement."""
     return await poller.send_advert(pubkey)
+
+
+@app.post("/api/login/{pubkey}")
+async def login_repeater(pubkey: str):
+    """Login to a repeater and confirm success."""
+    return await poller.login_repeater(pubkey)
+
+
+@app.post("/api/cmd/{pubkey}")
+async def send_repeater_cmd(pubkey: str, request: Request):
+    """Login to a repeater and send an arbitrary CLI command, returning any text response."""
+    body = await request.json()
+    cmd = str(body.get("cmd", "")).strip()
+    if not cmd:
+        return {"ok": False, "error": "No command provided"}
+    return await poller.send_repeater_cmd(pubkey, cmd)
+
+
+@app.post("/api/neighbors/{pubkey}")
+async def api_get_rf_neighbors(pubkey: str):
+    """Login to a repeater, run 'neighbors', and return parsed RF neighbor data."""
+    login = await poller.login_repeater(pubkey)
+    if not login.get("ok"):
+        return {"ok": False, "error": login.get("error", "Login failed")}
+    result = await poller.send_repeater_cmd(pubkey, "neighbors")
+    if not result.get("ok"):
+        return {"ok": False, "error": result.get("error", "Command failed")}
+    neighbors = []
+    for line in (result.get("response") or "").strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(":")
+        if len(parts) >= 3:
+            try:
+                neighbors.append({
+                    "pubkey": parts[0].upper(),
+                    "seconds_ago": int(parts[1]),
+                    "snr_db": round(int(parts[2]) / 4.0, 1),
+                })
+            except (ValueError, IndexError):
+                continue
+    return {"ok": True, "neighbors": neighbors}
 
 
 @app.post("/api/ntfy/test")

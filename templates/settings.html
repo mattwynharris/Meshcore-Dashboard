@@ -4,188 +4,866 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Settings - MeshCore Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ v }}">
   <style>
-    .settings-page-header {
+    /* ── Page shell ── */
+    .s-header {
       display: flex;
       align-items: center;
       gap: 1rem;
-      padding: 1rem 0 1.25rem;
+      padding: 1rem 1.25rem;
       border-bottom: 1px solid #1e293b;
-      margin-bottom: 1.5rem;
-      max-width: 900px;
-      margin-left: auto;
-      margin-right: auto;
+      position: sticky;
+      top: 0;
+      background: #0f172a;
+      z-index: 10;
     }
-    .back-btn {
+    .s-header h1 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      flex: 1;
+    }
+    .s-back {
       background: none;
       border: 1px solid #334155;
       color: #94a3b8;
-      font-size: 0.85rem;
-      cursor: pointer;
-      padding: 0.35rem 0.75rem;
+      font-size: 0.82rem;
+      padding: 0.3rem 0.65rem;
       border-radius: 6px;
+      cursor: pointer;
       font-family: inherit;
       text-decoration: none;
-      transition: color 0.2s, border-color 0.2s;
-      display: inline-block;
+      transition: color 0.15s, border-color 0.15s;
     }
-    .back-btn:hover { color: #e2e8f0; border-color: #64748b; }
-    .settings-page-header h2 { margin: 0; font-size: 1.1rem; color: #e2e8f0; }
-    .settings-page-body {
-      max-width: 900px;
+    .s-back:hover { color: #e2e8f0; border-color: #64748b; }
+
+    .s-body {
+      max-width: 860px;
       margin: 0 auto;
-      padding: 0 1rem 2rem;
+      padding: 1.5rem 1rem 6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
     }
-    /* Connection status */
-    .conn-status-row {
+
+    /* ── Cards ── */
+    /* ── Section accordion ── */
+    .s-section {
+      background: #090f1d;
+      border: 1px solid #1e3a5f50;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .s-section-head {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
-      flex-wrap: wrap;
+      gap: 0.9rem;
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+      border-bottom: 1px solid transparent;
     }
-    .conn-status-text {
+    .s-section.open > .s-section-head {
+      border-bottom-color: #1e293b;
+    }
+    .s-section-head:hover { background: rgba(255,255,255,0.03); }
+    .s-section-icon {
+      font-size: 1.6rem;
+      width: 2.2rem;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .s-section-labels { flex: 1; min-width: 0; }
+    .s-section-title {
+      display: block;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .s-section-desc {
+      display: block;
+      font-size: 0.7rem;
+      color: #475569;
+      margin-top: 0.1rem;
+    }
+    .s-section-chevron {
+      font-size: 1.1rem;
+      color: #334155;
+      transition: transform 0.25s, color 0.15s;
+      flex-shrink: 0;
+    }
+    .s-section.open > .s-section-head .s-section-chevron {
+      transform: rotate(90deg);
+      color: #64748b;
+    }
+    .s-section-body {
+      display: none;
+      flex-direction: column;
+      gap: 0.75rem;
+      padding: 1rem;
+    }
+    .s-section.open > .s-section-body {
+      display: flex;
+      animation: sOpen 0.18s ease;
+    }
+    @keyframes sOpen {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .s-card {
+      background: #1a2538;
+      border: 1px solid #1e3a5f40;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .s-card-head {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.9rem 1.1rem 0.75rem;
+      border-bottom: 1px solid #1e293b;
+    }
+    .s-card-icon {
+      font-size: 1rem;
+      width: 1.6rem;
+      height: 1.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0f172a;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .s-card-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #e2e8f0;
       flex: 1;
+    }
+    .s-card-body {
+      padding: 1rem 1.1rem;
+    }
+    .s-help {
+      font-size: 0.78rem;
+      color: #64748b;
+      margin: 0 0 0.85rem;
+      line-height: 1.5;
+    }
+    .s-help a { color: #38bdf8; }
+
+    /* ── Grid helpers ── */
+    .s-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+    .s-grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.75rem;
+    }
+    .s-full { grid-column: 1 / -1; }
+    @media (max-width: 560px) {
+      .s-grid, .s-grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* ── Form controls ── */
+    .s-field { display: flex; flex-direction: column; gap: 0.3rem; }
+    .s-label {
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .s-input, .s-select {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 0.5rem 0.7rem;
+      font-size: 0.88rem;
+      font-family: inherit;
+      width: 100%;
+      box-sizing: border-box;
+      transition: border-color 0.15s;
+      height: 2.4rem;
+    }
+    .s-input:focus, .s-select:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+    .s-input::placeholder { color: #475569; }
+    .s-select { cursor: pointer; }
+
+    /* inline time inputs */
+    .s-time-row {
+      display: flex;
+      gap: 0.35rem;
+      align-items: center;
+    }
+    .s-time-row .s-input { width: 4.5rem; flex-shrink: 0; }
+    .s-time-row span { font-size: 0.8rem; color: #64748b; }
+
+    /* ── Toggle / checkbox ── */
+    .s-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.4rem 0;
+    }
+    .s-toggle-row label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
       font-size: 0.85rem;
       color: #94a3b8;
     }
-    .conn-status-text strong { color: #e2e8f0; }
+    .s-toggle-row input[type="checkbox"] {
+      accent-color: #38bdf8;
+      width: 15px;
+      height: 15px;
+    }
+
+    /* ── Status row (connection) ── */
+    .s-conn-row {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+    }
+    .s-conn-text {
+      flex: 1;
+      font-size: 0.85rem;
+      color: #94a3b8;
+      min-width: 0;
+    }
+    .s-conn-text strong { color: #e2e8f0; }
+
+    /* ── Buttons ── */
+    .s-btn {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.82rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+      height: 2.4rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .s-btn:hover { color: #e2e8f0; border-color: #64748b; }
+    .s-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .s-btn-danger { color: #fca5a5; border-color: #7f1d1d; }
+    .s-btn-danger:hover { background: #7f1d1d30; border-color: #ef4444; color: #fca5a5; }
+    .s-btn-add {
+      margin-top: 0.65rem;
+      color: #38bdf8;
+      border-color: #1e3a5f;
+      font-size: 0.8rem;
+    }
+    .s-btn-add:hover { background: #1e3a5f40; border-color: #38bdf8; }
+
+    /* ── Warning banner ── */
+    .s-warning {
+      display: none;
+      margin-top: 0.65rem;
+      padding: 0.5rem 0.75rem;
+      background: #1a1000;
+      border: 1px solid #92400e;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      color: #fbbf24;
+    }
+
+    /* ── Divider inside card ── */
+    .s-divider { border: none; border-top: 1px solid #1e293b; margin: 0.75rem 0; }
+
+    /* ── Status feedback text ── */
+    .s-status-text {
+      font-size: 0.78rem;
+      color: #64748b;
+    }
+
+    /* ── Repeater / channel rows ── */
+    .s-row-item {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      padding: 0.65rem 0;
+      border-top: 1px solid #1e293b;
+    }
+    .s-row-item:first-child { border-top: none; padding-top: 0; }
+    .s-row-item .s-field { flex: 1; min-width: 8rem; }
+    .s-row-item .s-field-sm { flex: 0 0 6rem; }
+    .s-row-item .s-field-xs { flex: 0 0 5rem; }
+    .s-row-item .s-field-path { flex: 0 0 9rem; }
+    .btn-remove {
+      background: none;
+      border: 1px solid #334155;
+      color: #64748b;
+      width: 2rem;
+      height: 2.4rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      flex-shrink: 0;
+      margin-top: 1.4rem;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .btn-remove:hover { color: #ef4444; border-color: #ef4444; }
+    /* Repeater row two-line layout */
+    .rpt-main-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      width: 100%;
+    }
+    .rpt-extra-row {
+      display: none;
+      gap: 0.5rem;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      width: 100%;
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px dashed #1e293b;
+    }
+    .rpt-editing .rpt-extra-row { display: flex; }
+    /* pubkey: show preview when not editing, show input when editing */
+    .rpt-pubkey-preview {
+      display: inline-block;
+      font-size: 0.82rem;
+      color: #64748b;
+      font-family: monospace;
+      padding: 0.55rem 0;
+      letter-spacing: 0.03em;
+    }
+    .rpt-pubkey-input { display: none; }
+    .rpt-editing .rpt-pubkey-preview { display: none; }
+    .rpt-editing .rpt-pubkey-input { display: block; }
+    .rpt-move-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .card-move-btn {
+      background: none;
+      border: 1px solid #334155;
+      color: #64748b;
+      width: 1.5rem;
+      height: 1.1rem;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.6rem;
+      line-height: 1;
+      padding: 0;
+    }
+    .card-move-btn:hover { color: #e2e8f0; border-color: #64748b; }
+    .rpt-fw-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      color: #64748b;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 0.05rem 0.3rem;
+      margin-left: 0.4rem;
+      vertical-align: middle;
+    }
+
+    /* ── Update section ── */
+    .s-update-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .s-update-name {
+      font-size: 0.8rem;
+      color: #64748b;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .update-result { font-size: 0.82rem; margin-top: 0.5rem; }
+    .update-ok { color: #4ade80; }
+    .update-result.err { color: #f87171; }
+
+    /* ── Sticky save bar ── */
+    .s-save-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #0f172a;
+      border-top: 1px solid #1e293b;
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      justify-content: flex-end;
+      z-index: 20;
+    }
+    .s-save-status {
+      flex: 1;
+      font-size: 0.82rem;
+    }
+    .settings-status-ok  { color: #4ade80; }
+    .settings-status-error { color: #f87171; }
+    .s-save-btn {
+      background: #1d4ed8;
+      border: 1px solid #3b82f6;
+      color: #fff;
+      font-size: 0.88rem;
+      padding: 0.5rem 1.4rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 500;
+      transition: background 0.15s;
+    }
+    .s-save-btn:hover { background: #2563eb; }
+    .s-cancel-btn {
+      background: none;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.88rem;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .s-cancel-btn:hover { color: #e2e8f0; }
+
+    /* ── Tile slot editor ── */
+    .tile-slots-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.45rem;
+      margin-top: 0.65rem;
+    }
+    .tile-slot {
+      background: #0f172a;
+      border: 1.5px solid #334155;
+      border-radius: 10px;
+      padding: 0.6rem 0.7rem 0.55rem;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 0.18rem;
+      transition: border-color 0.15s, background 0.15s;
+      position: relative;
+      min-height: 3.2rem;
+    }
+    .tile-slot:hover { border-color: #475569; background: #131f35; }
+    .tile-slot.tile-slot-active {
+      border-color: #3b82f6;
+      background: #0c1a2e;
+    }
+    .tile-slot-num {
+      font-size: 0.6rem;
+      color: #334155;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .tile-slot-active .tile-slot-num { color: #3b82f6; }
+    .tile-slot-name {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      line-height: 1.25;
+    }
+    .tile-slot-edit {
+      position: absolute;
+      top: 0.4rem;
+      right: 0.5rem;
+      font-size: 0.65rem;
+      color: #1e293b;
+      transition: color 0.15s;
+    }
+    .tile-slot:hover .tile-slot-edit { color: #475569; }
+    .tile-slot-active .tile-slot-edit { color: #3b82f6; }
+
+    .tile-option-panel {
+      margin-top: 0.5rem;
+      background: #080e1c;
+      border: 1px solid #1e3a5f50;
+      border-radius: 12px;
+      padding: 0.6rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.35rem;
+      animation: sOpen 0.15s ease;
+    }
+    .tile-opt {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 0.5rem 0.7rem;
+      cursor: pointer;
+      font-size: 0.77rem;
+      color: #94a3b8;
+      transition: border-color 0.12s, color 0.12s, background 0.12s;
+      line-height: 1.3;
+    }
+    .tile-opt:hover { border-color: #475569; color: #e2e8f0; background: #243144; }
+    .tile-opt.tile-opt-active {
+      border-color: #3b82f6;
+      color: #38bdf8;
+      background: #0c1a2e;
+    }
   </style>
 </head>
 <body>
 
-  <div class="settings-page-header">
-    <a href="/" class="back-btn">&larr; Dashboard</a>
-    <h2>Settings</h2>
+  <div class="s-header">
+    <a href="/" class="s-back">&larr; Dashboard</a>
+    <h1>Settings</h1>
+    <div class="header-conn-mini" style="margin-left:auto"><span class="status-dot unknown" id="miniConnDot"></span><span id="miniConnText">—</span></div>
   </div>
 
-  <div class="settings-page-body">
+  <div class="s-body">
 
-    <!-- Connection Status -->
-    <div class="settings-section">
-      <h3>Connection Status</h3>
-      <div class="conn-status-row">
-        <span class="status-dot unknown" id="connStatusDot"></span>
-        <span class="conn-status-text" id="connStatusText">Checking&hellip;</span>
-        <button class="btn btn-secondary" id="connToggleBtn" onclick="toggleConnection()" style="min-width:6rem">
-          &hellip;
-        </button>
+    <!-- ── COMPANION DEVICE ── -->
+    <div class="s-section">
+      <div class="s-section-head" onclick="toggleSection(this)">
+        <span class="s-section-icon">&#128225;</span>
+        <div class="s-section-labels">
+          <span class="s-section-title">Companion Device</span>
+          <span class="s-section-desc">Connection, node settings &amp; push notifications</span>
+        </div>
+        <span class="s-section-chevron">&#8250;</span>
       </div>
-    </div>
+      <div class="s-section-body">
 
-    <!-- Companion Device -->
-    <div class="settings-section">
-      <h3>Companion Device</h3>
-      <div class="settings-row">
-        <div class="settings-field">
-          <label for="companionHost">IP Address</label>
-          <input type="text" id="companionHost" placeholder="192.168.1.100">
+      <div class="s-card">
+        <div class="s-card-head">
+          <div class="s-card-icon">&#128268;</div>
+          <div class="s-card-title">Connection</div>
         </div>
-        <div class="settings-field settings-field-small">
-          <label for="companionPort">Port</label>
-          <input type="number" id="companionPort" placeholder="5000" value="5000">
-        </div>
-      </div>
-    </div>
-
-    <!-- Polling Timing -->
-    <div class="settings-section">
-      <h3>Polling Timing</h3>
-      <div class="settings-row">
-        <div class="settings-field">
-          <label for="pollInterval">Poll Cycle (seconds)</label>
-          <input type="number" id="pollInterval" placeholder="3600" min="30">
-        </div>
-        <div class="settings-field">
-          <label for="staggerDelay">Stagger Delay (seconds)</label>
-          <input type="number" id="staggerDelay" placeholder="30" min="5">
-        </div>
-        <div class="settings-field settings-field-small">
-          <label for="lowBatteryPct">Low Batt %</label>
-          <input type="number" id="lowBatteryPct" placeholder="20" min="5" max="50" value="20">
+        <div class="s-card-body">
+          <div class="s-conn-row">
+            <span class="status-dot unknown" id="connStatusDot"></span>
+            <span class="s-conn-text" id="connStatusText">Checking&hellip;</span>
+            <button class="s-btn" id="connToggleBtn" onclick="toggleConnection()" style="min-width:7rem">&hellip;</button>
+            <label class="s-toggle-row" style="margin:0">
+              <input type="checkbox" id="autoConnectToggle" onchange="saveAutoConnect(this)">
+              Auto-connect
+            </label>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Map -->
-    <div class="settings-section">
-      <h3>Map</h3>
-      <div class="settings-row">
-        <div class="settings-field">
-          <label for="mapPathMaxKm">Max path segment distance (km)</label>
-          <input type="number" id="mapPathMaxKm" placeholder="300" min="10" max="5000" value="300">
+      <div class="s-card">
+        <div class="s-card-head">
+          <div class="s-card-icon">&#128225;</div>
+          <div class="s-card-title">Companion Device</div>
         </div>
-        <div class="settings-field settings-field-small">
-          <label for="nodeIdChars">Node ID depth</label>
-          <select id="nodeIdChars" style="height:2.2rem;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:0 0.5rem;font-family:inherit;font-size:0.9rem;">
-            <option value="2">1 byte (2 chars)</option>
-            <option value="4">2 bytes (4 chars)</option>
-            <option value="6">3 bytes (6 chars)</option>
-          </select>
+        <div class="s-card-body">
+          <div class="s-grid-3">
+            <div class="s-field" style="grid-column:span 2">
+              <div class="s-label">IP Address</div>
+              <input type="text" id="companionHost" class="s-input" placeholder="192.168.1.100">
+            </div>
+            <div class="s-field">
+              <div class="s-label">Port</div>
+              <input type="number" id="companionPort" class="s-input" placeholder="5000" value="5000">
+            </div>
+          </div>
+          <hr class="s-divider">
+          <label class="s-toggle-row">
+            <input type="checkbox" id="pullContactsToggle" onchange="onPullContactsChange(this)">
+            Pull contacts from node on connect
+          </label>
+          <p class="s-help" style="margin:0.15rem 0 0;">When off, no contacts are pulled from the node and RF advert packets will not add new contacts. Only your configured repeaters will be shown. Turning this off will also clear the current contact list.</p>
+          <hr class="s-divider">
+          <div class="s-grid">
+            <div class="s-field">
+              <div class="s-label">Node ID Display Size</div>
+              <select id="nodeIdChars" class="s-select" onchange="saveNodeIdMode(this)">
+                <option value="2">1 byte (default)</option>
+                <option value="4">2 bytes (experimental)</option>
+                <option value="6">3 bytes</option>
+              </select>
+              <div style="font-size:0.75rem;margin-top:0.35rem;color:#64748b;">Affects node labels only — path hops always show exactly what the packet contains.</div>
+              <div id="nodeIdModeStatus" style="font-size:0.78rem;margin-top:0.35rem;color:#64748b;"></div>
+            </div>
+            <div class="s-field" style="justify-content:flex-end">
+              <div class="s-label">&nbsp;</div>
+              <div style="display:flex;align-items:center;gap:0.75rem;height:2.4rem;">
+                <button onclick="rebootDevice()" id="rebootBtn" class="s-btn s-btn-danger">&#9211; Reboot Device</button>
+                <span id="rebootStatus" class="s-status-text"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="s-card">
+        <div class="s-card-head">
+          <div class="s-card-icon">&#128276;</div>
+          <div class="s-card-title">Push Notifications (ntfy)</div>
+        </div>
+        <div class="s-card-body">
+          <p class="s-help">Get a phone notification when a message arrives. Uses <a href="https://ntfy.sh" target="_blank">ntfy.sh</a> by default, or your own self-hosted server. Leave topic blank to disable.</p>
+          <div class="s-grid">
+            <div class="s-field">
+              <div class="s-label">ntfy Topic</div>
+              <input type="text" id="ntfyTopic" class="s-input" placeholder="e.g. meshcore-alerts">
+            </div>
+            <div class="s-field">
+              <div class="s-label">ntfy Server</div>
+              <input type="text" id="ntfyServer" class="s-input" placeholder="https://ntfy.sh">
+            </div>
+            <div class="s-field s-full">
+              <div class="s-label">Dashboard URL <span style="text-transform:none;letter-spacing:0;color:#475569">(tap notification to open)</span></div>
+              <input type="text" id="dashboardUrl" class="s-input" placeholder="http://192.168.1.100:8080">
+            </div>
+          </div>
+          <hr class="s-divider">
+          <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+            <label class="s-toggle-row" style="margin:0">
+              <input type="checkbox" id="ntfyMuted" onchange="toggleNtfyMute(this)">
+              Mute all notifications
+            </label>
+            <button class="s-btn" onclick="testNtfy()" style="margin-left:auto;">Send Test</button>
+            <span id="ntfyTestResult" class="s-status-text"></span>
+          </div>
+          <hr class="s-divider">
+          <div class="s-label" style="margin-bottom:0.5rem;">Mute by Channel</div>
+          <div id="channelMuteList" style="display:flex;flex-direction:column;gap:0.4rem;">
+            <div style="font-size:0.78rem;color:#475569">Loading channels&hellip;</div>
+          </div>
         </div>
       </div>
     </div>
-
-    <!-- Channels -->
-    <div class="settings-section">
-      <h3>Channels</h3>
-      <p class="settings-help">Name each channel index you want to monitor and message on. Channel passwords are configured on the device using the MeshCore app — the dashboard uses whatever channels are already set up on the node.</p>
-      <div id="channelList"></div>
-      <button class="btn btn-add" onclick="addChannelRow()">+ Add Channel</button>
     </div>
 
-    <!-- Repeaters -->
-    <div class="settings-section">
-      <h3>Repeaters</h3>
-      <div id="repeaterList"></div>
-      <button class="btn btn-add" onclick="addRepeaterRow()">+ Add Repeater</button>
+    <!-- ── REPEATERS ── -->
+    <div class="s-section">
+      <div class="s-section-head" onclick="toggleSection(this)">
+        <span class="s-section-icon">&#128246;</span>
+        <div class="s-section-labels">
+          <span class="s-section-title">Repeaters</span>
+          <span class="s-section-desc">Add, edit &amp; remove repeaters · polling &amp; alert thresholds</span>
+        </div>
+        <span class="s-section-chevron">&#8250;</span>
+      </div>
+      <div class="s-section-body">
+
+      <div class="s-card">
+        <div class="s-card-head">
+          <div class="s-card-icon">&#128246;</div>
+          <div class="s-card-title">Repeaters</div>
+          <button class="s-btn" id="rptEditBtn" onclick="toggleAllRepeaterEdit()" style="padding:0.2rem 0.75rem;font-size:0.78rem;">Edit</button>
+        </div>
+        <div class="s-card-body">
+          <div id="repeaterList"></div>
+          <button class="s-btn s-btn-add" onclick="addRepeaterRow()">+ Add Repeater</button>
+        </div>
+      </div>
+
+      <div class="s-card">
+        <div class="s-card-head">
+          <div class="s-card-icon">&#9201;</div>
+          <div class="s-card-title">Polling Timing</div>
+        </div>
+        <div class="s-card-body">
+          <div class="s-grid">
+            <div class="s-field">
+              <div class="s-label">Poll Cycle</div>
+              <div class="s-time-row">
+                <input type="number" id="pollHours" class="s-input" min="0" max="24" placeholder="1" value="1" onchange="onPollChange()">
+                <span>hr</span>
+                <input type="number" id="pollMins" class="s-input" min="0" max="59" placeholder="0" value="0" onchange="onPollChange()">
+                <span>min</span>
+              </div>
+              <input type="hidden" id="pollInterval" value="3600">
+              <div id="pollWarning" class="s-warning">Polling more often than 3 hours may drain repeater batteries faster.</div>
+            </div>
+            <div class="s-field">
+              <div class="s-label">Stagger Delay</div>
+              <div class="s-time-row">
+                <input type="number" id="staggerMins" class="s-input" min="0" max="59" placeholder="0" value="0" onchange="onStaggerChange()">
+                <span>min</span>
+                <input type="number" id="staggerSecs" class="s-input" min="0" max="59" placeholder="30" value="30" onchange="onStaggerChange()">
+                <span>sec</span>
+              </div>
+              <input type="hidden" id="staggerDelay" value="30">
+            </div>
+          </div>
+          <hr class="s-divider">
+          <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+            <label class="s-toggle-row">
+              <input type="checkbox" id="pollingEnabledToggle" checked>
+              Enable Auto Polling
+            </label>
+            <span class="s-help" style="margin:0;font-size:0.72rem;">Saved with Settings — also use Pause/Resume below for runtime control</span>
+          </div>
+          <hr class="s-divider">
+          <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+            <button class="s-btn" id="pollToggleBtn" onclick="togglePolling()">&#9208; Pause Polling</button>
+            <span id="pollToggleStatus" class="s-status-text"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="s-card">
+        <div class="s-card-head">
+          <div class="s-card-icon">&#9888;</div>
+          <div class="s-card-title">Alert Thresholds</div>
+        </div>
+        <div class="s-card-body">
+          <div class="s-grid-3">
+            <div class="s-field">
+              <div class="s-label">Low Battery (%)</div>
+              <input type="number" id="lowBatteryPct" class="s-input" min="1" max="100" placeholder="20" value="20">
+            </div>
+            <div class="s-field">
+              <div class="s-label">High Temp (°C)</div>
+              <input type="number" id="highTempAlert" class="s-input" min="20" max="120" placeholder="60" value="60">
+            </div>
+            <div class="s-field">
+              <div class="s-label">Noise Floor (dBm)</div>
+              <input type="number" id="highNoiseAlert" class="s-input" min="-120" max="0" placeholder="-90" value="-90">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     </div>
 
-    <!-- Push Notifications -->
-    <div class="settings-section">
-      <h3>Push Notifications (ntfy)</h3>
-      <p class="settings-help">Get a phone notification when a message arrives. Uses <a href="https://ntfy.sh" target="_blank" style="color:#38bdf8">ntfy.sh</a> by default, or point to your own self-hosted ntfy server. Leave topic blank to disable.</p>
-      <div class="settings-field">
-        <div class="settings-label">ntfy Topic</div>
-        <input type="text" id="ntfyTopic" placeholder="e.g. meshcore-mattwh-alerts">
+    <!-- ── APPEARANCE ── -->
+    <div class="s-section">
+      <div class="s-section-head" onclick="toggleSection(this)">
+        <span class="s-section-icon">&#127912;</span>
+        <div class="s-section-labels">
+          <span class="s-section-title">Appearance</span>
+          <span class="s-section-desc">Dashboard tiles · map &amp; graph display</span>
+        </div>
+        <span class="s-section-chevron">&#8250;</span>
       </div>
-      <div class="settings-field" style="margin-top:0.6rem">
-        <div class="settings-label">ntfy Server</div>
-        <input type="text" id="ntfyServer" placeholder="https://ntfy.sh">
+      <div class="s-section-body">
+
+      <div class="s-card">
+        <div class="s-card-head">
+          <div class="s-card-icon">&#9783;</div>
+          <div class="s-card-title">Dashboard Tiles</div>
+        </div>
+        <div class="s-card-body">
+          <p class="s-help">Tap any tile to change what it shows. You always have 6.</p>
+          <div id="tileSlotsGrid" class="tile-slots-grid"></div>
+          <div id="tileOptionPanel" class="tile-option-panel" style="display:none"></div>
+          <div style="margin-top:0.9rem">
+            <button class="s-btn" onclick="doResetTiles()">Reset to defaults</button>
+          </div>
+        </div>
       </div>
-      <div class="settings-field" style="margin-top:0.6rem">
-        <div class="settings-label">Dashboard URL <span style="font-size:0.75em;color:#64748b">(tap notification to open)</span></div>
-        <input type="text" id="dashboardUrl" placeholder="http://192.168.1.100:8080">
-      </div>
-      <div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.75rem">
-        <button class="btn btn-secondary" onclick="testNtfy()">Send Test Notification</button>
-        <span id="ntfyTestResult" style="font-size:0.82rem"></span>
+
+      <div class="s-card">
+        <div class="s-card-head">
+          <div class="s-card-icon">&#128506;</div>
+          <div class="s-card-title">Map &amp; Graph</div>
+        </div>
+        <div class="s-card-body">
+          <div class="s-grid">
+            <div class="s-field">
+              <div class="s-label">Map Path Max Distance (km)</div>
+              <input type="number" id="mapPathMaxKm" class="s-input" min="1" max="1000" placeholder="300" value="300">
+            </div>
+            <div class="s-field">
+              <div class="s-label">Stale Route Expiry</div>
+              <select id="routeTtlHours" class="s-select">
+                <option value="1">1 hour</option>
+                <option value="2">2 hours</option>
+                <option value="4">4 hours</option>
+                <option value="8">8 hours</option>
+                <option value="24">24 hours</option>
+              </select>
+              <div class="s-hint">Routes not refreshed within this time are hidden from map &amp; dashboard</div>
+            </div>
+          </div>
+          <hr class="s-divider">
+          <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+            <button class="s-btn s-btn-danger" onclick="resetPaths()">&#10006; Reset Known Paths</button>
+            <button class="s-btn s-btn-danger" onclick="resetContacts()">&#10006; Clear Contacts</button>
+            <span id="resetPathsStatus" class="s-status-text"></span>
+          </div>
+        </div>
       </div>
     </div>
+    </div>
 
-    <!-- Software Update -->
-    <div class="settings-section">
-      <h3>Software Update</h3>
-      <p class="settings-help">Upload a .zip of updated source files to apply changes without SSH access.</p>
-      <div class="update-row">
-        <input type="file" id="updateZipInput" accept=".zip" style="display:none" onchange="handleUpdateZip(this)">
-        <button class="btn btn-secondary" onclick="document.getElementById('updateZipInput').click()">Choose .zip&hellip;</button>
-        <span id="updateZipName" class="update-zip-name">No file chosen</span>
-        <button class="btn btn-secondary" id="uploadUpdateBtn" onclick="doUpdate()" disabled>Upload &amp; Apply</button>
+    <!-- ── UPDATE ── -->
+    <div class="s-section">
+      <div class="s-section-head" onclick="toggleSection(this)">
+        <span class="s-section-icon">&#8679;</span>
+        <div class="s-section-labels">
+          <span class="s-section-title">Update</span>
+          <span class="s-section-desc">Upload a new version · current: <span id="appVersionInline" style="color:#38bdf8">—</span></span>
+        </div>
+        <span class="s-section-chevron">&#8250;</span>
       </div>
-      <div id="updateResult" class="update-result"></div>
+      <div class="s-section-body">
+
+      <div class="s-card">
+        <div class="s-card-head">
+          <div class="s-card-icon">&#128190;</div>
+          <div class="s-card-title">Software Update</div>
+        </div>
+        <div class="s-card-body">
+          <p class="s-help">Upload a .zip of updated source files to apply changes without SSH access.</p>
+          <p class="s-help" style="margin-top:0.25rem">Current version: <strong id="appVersionBadge" style="color:#38bdf8">—</strong></p>
+          <div class="s-update-row">
+            <input type="file" id="updateZipInput" accept=".zip" style="display:none" onchange="handleUpdateZip(this)">
+            <button class="s-btn" onclick="document.getElementById('updateZipInput').click()">Choose .zip&hellip;</button>
+            <span id="updateZipName" class="s-update-name">No file chosen</span>
+            <button class="s-btn" id="uploadUpdateBtn" onclick="doUpdate()" disabled>Upload &amp; Apply</button>
+          </div>
+          <div id="updateResult" class="update-result"></div>
+        </div>
+      </div>
+    </div>
     </div>
 
-    <!-- Actions -->
-    <div class="settings-actions">
-      <span id="settingsStatus" class="settings-status"></span>
-      <a href="/" class="btn btn-secondary">Cancel</a>
-      <button class="btn btn-primary" onclick="saveSettings()">Save &amp; Apply</button>
-    </div>
+  </div>
 
+  <!-- Sticky save bar -->
+  <div class="s-save-bar">
+    <span id="settingsStatus" class="s-save-status"></span>
+    <a href="/" class="s-cancel-btn">Cancel</a>
+    <button class="s-save-btn" onclick="saveSettings()">Save &amp; Apply</button>
   </div>
 
   <script>
+    // --- Accordion ---
+    function toggleSection(head) {
+      var section = head.parentElement;
+      var isOpen = section.classList.contains('open');
+      document.querySelectorAll('.s-section').forEach(function(s) { s.classList.remove('open'); });
+      if (!isOpen) section.classList.add('open');
+    }
+
     // --- Utilities ---
 
     function escapeAttr(str) {
@@ -195,7 +873,123 @@
     function showStatus(msg, isError) {
       var el = document.getElementById('settingsStatus');
       el.textContent = msg;
-      el.className = 'settings-status' + (isError ? ' settings-status-error' : ' settings-status-ok');
+      el.className = 's-save-status' + (isError ? ' settings-status-error' : ' settings-status-ok');
+    }
+
+    // --- Auto Connect ---
+
+    var _nodeIdModeLabels = ['1 byte (default)', '2 bytes (experimental)', '3 bytes'];
+
+    function _setNodeIdStatus(msg, color) {
+      var el = document.getElementById('nodeIdModeStatus');
+      if (el) { el.textContent = msg; el.style.color = color || '#64748b'; }
+    }
+
+    function refreshNodeIdMode() {
+      fetch('/api/device/node-id-mode')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.ok && typeof d.mode === 'number') {
+            var deviceChars = (d.mode + 1) * 2;
+            document.getElementById('nodeIdChars').value = deviceChars;
+            if (d.inferred) {
+              _setNodeIdStatus('Read from config — not connected to device', '#64748b');
+            } else {
+              _setNodeIdStatus('Synced from device \u2714', '#4ade80');
+            }
+          } else {
+            _setNodeIdStatus('Could not read from device — showing config value', '#f59e0b');
+          }
+        }).catch(function() {
+          _setNodeIdStatus('Not connected — showing config value', '#64748b');
+        });
+    }
+
+    function saveNodeIdMode(sel) {
+      var chars = parseInt(sel.value) || 2;
+      var mode = (chars / 2) - 1;  // 2chars→mode0, 4chars→mode1, 6chars→mode2
+      // Save display depth to config
+      fetch('/api/settings')
+        .then(function(r) { return r.json(); })
+        .then(function(s) {
+          s.node_id_chars = chars;
+          return fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(s)
+          });
+        }).catch(function() {});
+      // Send mode to device
+      _setNodeIdStatus('Sending to device…', '#94a3b8');
+      fetch('/api/device/node-id-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: mode })
+      }).then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.ok) {
+            _setNodeIdStatus('Device updated \u2714 set to ' + _nodeIdModeLabels[mode], '#4ade80');
+          } else {
+            _setNodeIdStatus('Device error: ' + (d.error || 'unknown') + ' — config saved', '#f87171');
+          }
+        }).catch(function() {
+          _setNodeIdStatus('Not connected — config saved, device not updated', '#f59e0b');
+        });
+    }
+
+    function rebootDevice() {
+      var btn = document.getElementById('rebootBtn');
+      var status = document.getElementById('rebootStatus');
+      if (!confirm('Reboot the companion device?')) return;
+      btn.disabled = true;
+      if (status) status.textContent = 'Rebooting…';
+      fetch('/api/device/reboot', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (status) status.textContent = d.ok ? 'Reboot command sent — reconnecting shortly' : ('Error: ' + (d.error || 'unknown'));
+        }).catch(function() {
+          if (status) status.textContent = 'Request failed';
+        }).finally(function() {
+          setTimeout(function() { btn.disabled = false; if (status) status.textContent = ''; }, 6000);
+        });
+    }
+
+    function onPullContactsChange(cb) {
+      if (!cb.checked) {
+        var ok = confirm('Turning this off will clear all imported contacts from the dashboard.\n\nContinue?');
+        if (!ok) {
+          cb.checked = true;
+          return;
+        }
+        // Clear contacts then save setting
+        fetch('/api/contacts/reset', { method: 'POST' })
+          .catch(function() {});
+      }
+      fetch('/api/settings')
+        .then(function(r) { return r.json(); })
+        .then(function(s) {
+          s.pull_contacts_on_start = cb.checked;
+          return fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(s)
+          });
+        })
+        .catch(function() {});
+    }
+
+    function saveAutoConnect(cb) {
+      fetch('/api/settings')
+        .then(function(r) { return r.json(); })
+        .then(function(s) {
+          s.auto_connect = cb.checked;
+          return fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(s)
+          });
+        })
+        .catch(function() {});
     }
 
     // --- Connection Status ---
@@ -217,7 +1011,11 @@
     function loadConnectionStatus() {
       fetch('/api/connection')
         .then(function(r) { return r.json(); })
-        .then(function(d) { updateConnectionUI(d.connected, d.host, d.port); })
+        .then(function(d) {
+          updateConnectionUI(d.connected, d.host, d.port);
+          var badge = document.getElementById('appVersionBadge');
+          if (badge && d.app_version) badge.textContent = 'v' + d.app_version;
+        })
         .catch(function() {});
     }
 
@@ -254,20 +1052,98 @@
     // Refresh connection status every 5s
     setInterval(loadConnectionStatus, 5000);
 
+    function loadPollStatus() {
+      fetch('/api/connection')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          var btn = document.getElementById('pollToggleBtn');
+          var status = document.getElementById('pollToggleStatus');
+          if (!btn) return;
+          if (!d.connected) {
+            btn.textContent = '\u23f8 Pause Polling';
+            btn.disabled = true;
+            if (status) status.textContent = 'Not connected';
+            return;
+          }
+          btn.disabled = false;
+          var paused = d.polling_enabled === false;
+          btn.textContent = paused ? '\u25b6 Resume Polling' : '\u23f8 Pause Polling';
+          btn.style.color = paused ? '#f59e0b' : '';
+          btn.style.borderColor = paused ? '#f59e0b' : '';
+          if (status) status.textContent = paused ? 'Polling is paused' : 'Polling is active';
+        })
+        .catch(function() {
+          var btn = document.getElementById('pollToggleBtn');
+          if (btn) { btn.textContent = '\u23f8 Pause Polling'; btn.disabled = true; }
+        });
+    }
+
+    function resetContacts() {
+      if (!confirm('This will remove all contacts and advert nodes. The list will rebuild as new adverts are received.')) return;
+      var status = document.getElementById('resetPathsStatus');
+      status.textContent = 'Clearing\u2026';
+      status.style.color = '#94a3b8';
+      fetch('/api/contacts/reset', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.ok) {
+            status.textContent = 'Contacts cleared \u2714 waiting for new adverts';
+            status.style.color = '#4ade80';
+          } else {
+            status.textContent = d.error || 'Failed';
+            status.style.color = '#f87171';
+          }
+        }).catch(function() {
+          status.textContent = 'Request failed';
+          status.style.color = '#f87171';
+        });
+    }
+
+    function resetPaths() {
+      if (!confirm('Clear all known paths? The map and contacts will re-learn paths from the next advert packets received.')) return;
+      var status = document.getElementById('resetPathsStatus');
+      status.textContent = 'Clearing\u2026';
+      status.style.color = '#94a3b8';
+      fetch('/api/contact-routes/reset', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.ok) {
+            status.textContent = 'Paths cleared \u2714 will re-learn from next adverts';
+            status.style.color = '#4ade80';
+          } else {
+            status.textContent = d.error || 'Failed';
+            status.style.color = '#f87171';
+          }
+        }).catch(function() {
+          status.textContent = 'Request failed';
+          status.style.color = '#f87171';
+        });
+    }
+
+    function togglePolling() {
+      fetch('/api/polling/toggle', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function() { loadPollStatus(); })
+        .catch(function() {});
+    }
+
+    loadPollStatus();
+    setInterval(loadPollStatus, 5000);
+
     // --- Channel Rows ---
 
     function addChannelRow(name, idx) {
       var list = document.getElementById('channelList');
       var row = document.createElement('div');
-      row.className = 'repeater-row';
+      row.className = 's-row-item repeater-row';
       row.innerHTML =
-        '<div class="settings-field">' +
-          '<label>Name</label>' +
-          '<input type="text" class="ch-name" placeholder="Primary" value="' + escapeAttr(name || '') + '">' +
+        '<div class="s-field" style="flex:1">' +
+          '<div class="s-label">Name</div>' +
+          '<input type="text" class="s-input ch-name" placeholder="Primary" value="' + escapeAttr(name || '') + '">' +
         '</div>' +
-        '<div class="settings-field settings-field-small">' +
-          '<label>Channel #</label>' +
-          '<input type="number" class="ch-idx" placeholder="0" min="0" max="9" value="' + escapeAttr(idx !== undefined ? idx : '') + '">' +
+        '<div class="s-field s-field-xs">' +
+          '<div class="s-label">Channel #</div>' +
+          '<input type="number" class="s-input ch-idx" placeholder="0" min="0" max="9" value="' + escapeAttr(idx !== undefined ? idx : '') + '">' +
         '</div>' +
         '<button class="btn-remove" title="Remove">&times;</button>';
       row.querySelector('.btn-remove').addEventListener('click', function() { row.remove(); });
@@ -286,41 +1162,74 @@
       }
     }
 
+    var _rptEditing = false;
+    function toggleAllRepeaterEdit() {
+      _rptEditing = !_rptEditing;
+      var btn = document.getElementById('rptEditBtn');
+      btn.textContent = _rptEditing ? 'Done' : 'Edit';
+      btn.style.color = _rptEditing ? '#4ade80' : '';
+      btn.style.borderColor = _rptEditing ? '#4ade80' : '';
+      document.querySelectorAll('#repeaterList .repeater-row').forEach(function(row) {
+        row.classList.toggle('rpt-editing', _rptEditing);
+      });
+    }
+
     function addRepeaterRow(name, pubkey, adminPass, path, fwVersion) {
       var list = document.getElementById('repeaterList');
       var row = document.createElement('div');
-      row.className = 'repeater-row';
+      row.className = 's-row-item repeater-row';
       var fwBadge = fwVersion
         ? '<span class="rpt-fw-badge" title="Firmware version">FW ' + escapeAttr(fwVersion) + '</span>'
         : '';
       row.innerHTML =
-        '<div class="rpt-move-btns">' +
-          '<button class="card-move-btn rpt-move-up" title="Move up">&#8593;</button>' +
-          '<button class="card-move-btn rpt-move-down" title="Move down">&#8595;</button>' +
+        /* top line: name + pubkey */
+        '<div class="rpt-main-row">' +
+          '<div class="s-field" style="flex:1;min-width:7rem">' +
+            '<div class="s-label">Name</div>' +
+            '<input type="text" class="s-input rpt-name" placeholder="My Repeater" value="' + escapeAttr(name || '') + '">' +
+            fwBadge +
+          '</div>' +
+          '<div class="s-field" style="flex:2;min-width:9rem">' +
+            '<div class="s-label">Public Key</div>' +
+            '<span class="rpt-pubkey-preview">' + (pubkey ? escapeAttr(pubkey.slice(0,10)) + '\u2026' : '<span style="color:#475569">not set</span>') + '</span>' +
+            '<input type="text" class="s-input rpt-pubkey rpt-pubkey-input" placeholder="a1b2c3d4e5f6..." value="' + escapeAttr(pubkey || '') + '">' +
+          '</div>' +
         '</div>' +
-        '<div class="settings-field">' +
-          '<label>Name</label>' +
-          '<input type="text" class="rpt-name" placeholder="My Repeater" value="' + escapeAttr(name || '') + '">' +
-          fwBadge +
-        '</div>' +
-        '<div class="settings-field">' +
-          '<label>Public Key</label>' +
-          '<input type="text" class="rpt-pubkey" placeholder="a1b2c3d4e5f6..." value="' + escapeAttr(pubkey || '') + '">' +
-        '</div>' +
-        '<div class="settings-field settings-field-small">' +
-          '<label>Admin Pass</label>' +
-          '<input type="text" class="rpt-pass" placeholder="password" value="' + escapeAttr(adminPass || '') + '">' +
-        '</div>' +
-        '<div class="settings-field settings-field-path">' +
-          '<label>Path</label>' +
-          '<input type="text" class="rpt-path" placeholder="4d,3c,ee" value="' + escapeAttr(path || '') + '">' +
-        '</div>' +
-        '<button class="btn-remove" title="Remove">&times;</button>';
+        /* second line: pass + path + move + remove — hidden until Edit */
+        '<div class="rpt-extra-row">' +
+          '<div class="s-field s-field-sm">' +
+            '<div class="s-label">Admin Pass</div>' +
+            '<input type="text" class="s-input rpt-pass" placeholder="optional" value="' + escapeAttr(adminPass || '') + '">' +
+          '</div>' +
+          '<div class="s-field s-field-path">' +
+            '<div class="s-label">Path</div>' +
+            '<input type="text" class="s-input rpt-path" placeholder="4d,3c,ee" value="' + escapeAttr(path || '') + '">' +
+          '</div>' +
+          '<div class="rpt-move-btns" style="margin-top:1.4rem;">' +
+            '<button class="card-move-btn rpt-move-up" title="Move up">&#8593;</button>' +
+            '<button class="card-move-btn rpt-move-down" title="Move down">&#8595;</button>' +
+          '</div>' +
+          '<button class="btn-remove" style="margin-top:1.4rem;" title="Remove">&times;</button>' +
+        '</div>';
 
+      if (_rptEditing) row.classList.add('rpt-editing');
       row.querySelector('.rpt-move-up').addEventListener('click', function() { moveRepeaterRow(row, -1); });
       row.querySelector('.rpt-move-down').addEventListener('click', function() { moveRepeaterRow(row, 1); });
       row.querySelector('.btn-remove').addEventListener('click', function() { row.remove(); });
       list.appendChild(row);
+    }
+
+    // --- ntfy Mute Toggle ---
+
+    function toggleNtfyMute(cb) {
+      fetch('/api/ntfy/toggle', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.ok) {
+            cb.checked = !res.enabled;
+          }
+        })
+        .catch(function() {});
     }
 
     // --- ntfy Test ---
@@ -356,27 +1265,60 @@
 
     // --- Save ---
 
+    function onPollChange() {
+      var h = parseInt(document.getElementById('pollHours').value) || 0;
+      var m = parseInt(document.getElementById('pollMins').value) || 0;
+      var secs = h * 3600 + m * 60;
+      document.getElementById('pollInterval').value = secs || 3600;
+      var warn = document.getElementById('pollWarning');
+      if (warn) warn.style.display = (secs > 0 && secs < 10800) ? '' : 'none';
+    }
+
+    function onStaggerChange() {
+      var m = parseInt(document.getElementById('staggerMins').value) || 0;
+      var s = parseInt(document.getElementById('staggerSecs').value) || 0;
+      document.getElementById('staggerDelay').value = m * 60 + s || 30;
+    }
+
+    function setPollFields(seconds) {
+      seconds = parseInt(seconds) || 3600;
+      var h = Math.floor(seconds / 3600);
+      var m = Math.floor((seconds % 3600) / 60);
+      document.getElementById('pollHours').value = h;
+      document.getElementById('pollMins').value = m;
+      document.getElementById('pollInterval').value = seconds;
+      var warn = document.getElementById('pollWarning');
+      if (warn) warn.style.display = (seconds > 0 && seconds < 10800) ? '' : 'none';
+    }
+
+    function setStaggerFields(seconds) {
+      seconds = parseInt(seconds) || 30;
+      var m = Math.floor(seconds / 60);
+      var s = seconds % 60;
+      document.getElementById('staggerMins').value = m;
+      document.getElementById('staggerSecs').value = s;
+      document.getElementById('staggerDelay').value = seconds;
+    }
+
     function saveSettings() {
       var host = document.getElementById('companionHost').value.trim();
       var port = document.getElementById('companionPort').value.trim();
+      onPollChange(); onStaggerChange();
       var pollInterval = document.getElementById('pollInterval').value.trim();
       var staggerDelay = document.getElementById('staggerDelay').value.trim();
       var lowBatPct = document.getElementById('lowBatteryPct').value.trim();
+      var highTempAlert = document.getElementById('highTempAlert').value.trim();
+      var highNoiseAlert = document.getElementById('highNoiseAlert').value.trim();
       var mapPathMaxKm = document.getElementById('mapPathMaxKm').value.trim();
       var nodeIdChars = parseInt(document.getElementById('nodeIdChars').value) || 2;
 
       if (!host) { showStatus('Companion IP is required', true); return; }
 
-      // Collect channels
-      var chRows = document.querySelectorAll('#channelList .repeater-row');
-      var channels = [];
-      for (var i = 0; i < chRows.length; i++) {
-        var cn = chRows[i].querySelector('.ch-name').value.trim();
-        var ci = chRows[i].querySelector('.ch-idx').value.trim();
-        if (cn && ci !== '') {
-          channels.push({ name: cn, idx: parseInt(ci) || 0 });
-        }
-      }
+      // Collect muted channels
+      var mutedChannels = [];
+      document.querySelectorAll('.ch-mute-toggle').forEach(function(cb) {
+        if (cb.checked) mutedChannels.push(parseInt(cb.dataset.idx));
+      });
 
       // Collect repeaters
       var rows = document.querySelectorAll('.repeater-row');
@@ -400,21 +1342,28 @@
       var ntfyTopic = document.getElementById('ntfyTopic').value.trim();
       var ntfyServer = document.getElementById('ntfyServer').value.trim();
       var dashboardUrl = document.getElementById('dashboardUrl').value.trim();
+      var routeTtlHours = parseInt(document.getElementById('routeTtlHours').value) || 2;
 
       var payload = {
         companion_host: host,
         companion_port: parseInt(port) || 5000,
         repeaters: repeaters,
-        channels: channels,
+        muted_channels: mutedChannels,
         poll_interval_seconds: parseInt(pollInterval) || 3600,
         stagger_delay_seconds: parseInt(staggerDelay) || 30,
         stale_threshold_seconds: 900,
         low_battery_percent: parseInt(lowBatPct) || 20,
+        high_temp_alert_c: parseInt(highTempAlert) || 60,
+        high_noise_alert_dbm: parseInt(highNoiseAlert) || -90,
         map_path_max_km: parseInt(mapPathMaxKm) || 300,
+        route_ttl_hours: routeTtlHours,
         node_id_chars: nodeIdChars,
         ntfy_topic: ntfyTopic,
         ntfy_server: ntfyServer || "https://ntfy.sh",
-        dashboard_url: dashboardUrl
+        dashboard_url: dashboardUrl,
+        auto_connect: document.getElementById('autoConnectToggle').checked,
+        pull_contacts_on_start: document.getElementById('pullContactsToggle').checked,
+        polling_enabled: document.getElementById('pollingEnabledToggle').checked
       };
 
       fetch('/api/settings', {
@@ -467,8 +1416,8 @@
             var count = (data.files || []).length;
             resultEl.innerHTML = '<span class="update-ok">&#10003; ' + count + ' file' + (count !== 1 ? 's' : '') + ' applied.</span> ';
             var rb = document.createElement('button');
-            rb.className = 'btn btn-primary';
-            rb.style.cssText = 'padding:0.2rem 0.7rem;font-size:0.8rem';
+            rb.className = 's-btn';
+            rb.style.cssText = 'color:#4ade80;border-color:#4ade80;margin-left:0.5rem';
             rb.textContent = 'Restart Now';
             rb.onclick = doRestart;
             resultEl.appendChild(rb);
@@ -500,6 +1449,34 @@
       setTimeout(poll, 2000);
     }
 
+    // --- Channel Mutes ---
+
+    function loadChannelMutes(mutedIdxs) {
+      var container = document.getElementById('channelMuteList');
+      fetch('/api/channels')
+        .then(function(r) { return r.json(); })
+        .then(function(channels) {
+          if (!channels || !channels.length) {
+            container.innerHTML = '<div style="font-size:0.78rem;color:#475569">No channels found — connect to companion first</div>';
+            return;
+          }
+          container.innerHTML = '';
+          channels.forEach(function(ch) {
+            var isMuted = mutedIdxs.indexOf(ch.idx) >= 0;
+            var row = document.createElement('label');
+            row.className = 's-toggle-row';
+            row.style.cssText = 'padding:0.5rem 0.7rem;background:#0f172a;border-radius:8px;border:1px solid #1e293b;';
+            row.innerHTML =
+              '<input type="checkbox" class="ch-mute-toggle" data-idx="' + ch.idx + '"' + (isMuted ? ' checked' : '') + '>' +
+              '<span style="flex:1;font-size:0.85rem;color:#e2e8f0">' + escapeAttr(ch.name) + '</span>' +
+              '<span style="font-size:0.72rem;color:#475569">Ch ' + ch.idx + '</span>';
+            container.appendChild(row);
+          });
+        }).catch(function() {
+          container.innerHTML = '<div style="font-size:0.78rem;color:#475569">Could not load channels</div>';
+        });
+    }
+
     // --- Load on page open ---
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -510,20 +1487,27 @@
         .then(function(s) {
           document.getElementById('companionHost').value = s.companion_host || '';
           document.getElementById('companionPort').value = s.companion_port || 5000;
-          document.getElementById('pollInterval').value = s.poll_interval_seconds || 3600;
-          document.getElementById('staggerDelay').value = s.stagger_delay_seconds || 30;
+          setPollFields(s.poll_interval_seconds || 3600);
+          setStaggerFields(s.stagger_delay_seconds || 30);
           document.getElementById('lowBatteryPct').value = s.low_battery_percent || 20;
+          document.getElementById('highTempAlert').value = s.high_temp_alert_c || 60;
+          document.getElementById('highNoiseAlert').value = s.high_noise_alert_dbm || -90;
           document.getElementById('mapPathMaxKm').value = s.map_path_max_km || 300;
           document.getElementById('nodeIdChars').value = s.node_id_chars || 2;
+          // Read actual mode from device and sync dropdown
+          refreshNodeIdMode();
           document.getElementById('ntfyTopic').value = s.ntfy_topic || '';
           document.getElementById('ntfyServer').value = s.ntfy_server || 'https://ntfy.sh';
           document.getElementById('dashboardUrl').value = s.dashboard_url || '';
+          document.getElementById('ntfyMuted').checked = s.ntfy_enabled === false;
+          document.getElementById('autoConnectToggle').checked = s.auto_connect !== false;
+          document.getElementById('pullContactsToggle').checked = s.pull_contacts_on_start !== false;
+          document.getElementById('pollingEnabledToggle').checked = s.polling_enabled !== false;
+          var ttlEl = document.getElementById('routeTtlHours');
+          if (ttlEl) ttlEl.value = s.route_ttl_hours || 2;
 
-          // Channels
-          var chList = document.getElementById('channelList');
-          chList.innerHTML = '';
-          var channels = s.channels || [{ name: 'Primary', idx: 0 }];
-          channels.forEach(function(c) { addChannelRow(c.name, c.idx); });
+          // Channel mute list
+          loadChannelMutes(s.muted_channels || []);
 
           // Repeaters — also fetch live data to get FW versions
           var list = document.getElementById('repeaterList');
@@ -552,6 +1536,94 @@
         })
         .catch(function() { showStatus('Failed to load settings', true); });
     });
+  </script>
+  <script src="/static/nav.js?v={{ v }}"></script>
+  <script>
+  (function(){function _mc(){fetch('/api/connection').then(function(r){return r.json();}).then(function(d){var dot=document.getElementById('miniConnDot'),txt=document.getElementById('miniConnText');if(!dot)return;dot.className='status-dot '+(d.connected?'online':'offline');txt.textContent=d.connected?'Connected':'Disconnected';}).catch(function(){var dot=document.getElementById('miniConnDot');if(dot)dot.className='status-dot offline';});}
+  _mc();setInterval(_mc,10000);})();
+  </script>
+  <script>
+  // ── Dashboard tile slot editor ──
+  var _TILE_LABELS = {
+    packets:         'RF Packets (1h)',
+    nodes:           'Total Nodes',
+    nodes_24h:       'Active Nodes (24h)',
+    routes:          'Known Routes',
+    repeaters:       'Repeaters Online',
+    repeaters_total: 'Total Repeaters',
+    new_nodes:       'New Nodes (24h)',
+    messages:        'Messages (24h)',
+    alerts:          'Active Alerts',
+    avg_rssi:        'Avg RSSI',
+  };
+  var _TILE_DEFAULT_IDS = ['packets','nodes','routes','repeaters','new_nodes','messages'];
+  var _editingSlot = null;
+
+  function _getTilesCfg() {
+    try { var r = JSON.parse(localStorage.getItem('meshcore_tiles_v1')); if (r&&r.length) return r; } catch(e){}
+    return null;
+  }
+
+  function _getTileCfg6() {
+    var cfg = (_getTilesCfg() || _TILE_DEFAULT_IDS.slice()).slice(0, 6);
+    _TILE_DEFAULT_IDS.forEach(function(id) {
+      if (cfg.length < 6 && cfg.indexOf(id) === -1) cfg.push(id);
+    });
+    return cfg.slice(0, 6);
+  }
+
+  function buildTileSlotsGrid() {
+    var cfg = _getTileCfg6();
+    var grid = document.getElementById('tileSlotsGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    cfg.forEach(function(id, i) {
+      var slot = document.createElement('div');
+      slot.className = 'tile-slot' + (_editingSlot === i ? ' tile-slot-active' : '');
+      slot.innerHTML =
+        '<span class="tile-slot-num">' + (i + 1) + '</span>' +
+        '<span class="tile-slot-name">' + (_TILE_LABELS[id] || id) + '</span>' +
+        '<span class="tile-slot-edit">&#9998;</span>';
+      (function(idx) { slot.onclick = function() { toggleTileSlot(idx); }; })(i);
+      grid.appendChild(slot);
+    });
+    buildTileOptionPanel();
+  }
+
+  function toggleTileSlot(idx) {
+    _editingSlot = (_editingSlot === idx) ? null : idx;
+    buildTileSlotsGrid();
+  }
+
+  function buildTileOptionPanel() {
+    var panel = document.getElementById('tileOptionPanel');
+    if (!panel) return;
+    if (_editingSlot === null) { panel.style.display = 'none'; return; }
+    var cfg = _getTileCfg6();
+    var currentId = cfg[_editingSlot];
+    panel.style.display = '';
+    panel.innerHTML = Object.keys(_TILE_LABELS).map(function(id) {
+      var active = id === currentId ? ' tile-opt-active' : '';
+      return '<div class="tile-opt' + active + '" onclick="pickTileOption(\'' + id + '\')">' + _TILE_LABELS[id] + '</div>';
+    }).join('');
+  }
+
+  function pickTileOption(id) {
+    if (_editingSlot === null) return;
+    var cfg = _getTileCfg6();
+    cfg[_editingSlot] = id;
+    localStorage.setItem('meshcore_tiles_v1', JSON.stringify(cfg));
+    _editingSlot = null;
+    buildTileSlotsGrid();
+  }
+
+  function doResetTiles() {
+    localStorage.setItem('meshcore_tiles_v1', JSON.stringify(_TILE_DEFAULT_IDS.slice()));
+    _editingSlot = null;
+    buildTileSlotsGrid();
+  }
+
+  document.addEventListener('DOMContentLoaded', buildTileSlotsGrid);
   </script>
 </body>
 </html>

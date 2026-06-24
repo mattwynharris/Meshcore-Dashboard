@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Activity Logs - MeshCore Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ v }}">
   <style>
     .logs-page-header {
       display: flex;
@@ -143,11 +143,23 @@
 </head>
 <body>
 
-  <div class="logs-page-header">
-    <a href="/" class="back-btn">&#8592; Dashboard</a>
-    <a href="/map" class="back-btn">Map</a>
-    <div class="logs-page-title">Activity Logs</div>
-  </div>
+  <header>
+    <div class="header-title">
+      <h1>Activity Logs</h1>
+      <div class="header-meta">
+        <div class="header-conn-mini"><span class="status-dot unknown" id="miniConnDot"></span><span id="miniConnText">—</span></div>
+      </div>
+    </div>
+    <nav class="nav-group">
+      <a href="/" class="nav-btn" title="Dashboard">Dashboard</a>
+      <a href="/map" class="nav-btn" title="Network Map">Map</a>
+      <a href="/messages" class="nav-btn" title="Messages">Messages</a>
+      <a href="/packets" class="nav-btn" title="Recent Packets">Packets</a>
+      <a href="/contacts" class="nav-btn" title="Contacts">Contacts</a>
+      <a href="/logs" class="nav-btn nav-btn-active" title="Activity Logs">Logs</a>
+      <a href="/settings" class="nav-btn nav-settings" title="Settings">&#9881;</a>
+    </nav>
+  </header>
 
   <div class="logs-page-body">
 
@@ -169,6 +181,8 @@
         <label for="logLevel">Level</label>
         <select id="logLevel" onchange="applyFilters()">
           <option value="">All</option>
+          <option value="ALERT">⚠ Alerts</option>
+          <option value="CLI">⌨ Admin CLI</option>
           <option value="ERROR">Error</option>
           <option value="WARNING">Warning</option>
           <option value="INFO">Info</option>
@@ -370,6 +384,11 @@
 
       fetchLogs();
     });
+  </script>
+  <script src="/static/nav.js?v={{ v }}"></script>
+  <script>
+  (function(){function _mc(){fetch('/api/connection').then(function(r){return r.json();}).then(function(d){var dot=document.getElementById('miniConnDot'),txt=document.getElementById('miniConnText');if(!dot)return;dot.className='status-dot '+(d.connected?'online':'offline');txt.textContent=d.connected?'Connected':'Disconnected';}).catch(function(){var dot=document.getElementById('miniConnDot');if(dot)dot.className='status-dot offline';});}
+  _mc();setInterval(_mc,10000);})();
   </script>
 
 </body>

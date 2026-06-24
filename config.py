@@ -25,6 +25,8 @@ _DEFAULTS = {
     "stale_threshold_seconds": 900,
     "low_battery_percent": 20,
     "log_retention_hours": 24,
+    "high_temp_alert_c": 60,
+    "high_noise_alert_dbm": -90,
     "map_path_max_km": 300,
     "node_id_chars": 2,
     "channels": [
@@ -33,7 +35,13 @@ _DEFAULTS = {
     "ntfy_topic": "",
     "ntfy_server": "https://ntfy.sh",
     "ntfy_enabled": True,
+    "muted_channels": [],
     "dashboard_url": "",
+    "auto_connect": True,
+    "graph_hours": 24,
+    "route_ttl_hours": 2,
+    "pull_contacts_on_start": True,
+    "polling_enabled": True,
 }
 
 # --- History (not editable from web UI) ---
@@ -93,8 +101,14 @@ def get_low_battery_percent() -> int:
 def get_log_retention_hours() -> int:
     return _load_settings().get("log_retention_hours", 24)
 
+def get_route_ttl_hours() -> int:
+    return _load_settings().get("route_ttl_hours", 2)
+
 def get_channels() -> list:
     return _load_settings().get("channels", [{"name": "Primary", "idx": 0}])
+
+def get_pull_contacts_on_start() -> bool:
+    return _load_settings().get("pull_contacts_on_start", True)
 
 
 # Backwards-compatible constants (used by data_store.py at import time)

@@ -4,101 +4,198 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Messages - MeshCore Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ v }}">
   <style>
-    /* ---- Page layout ---- */
-    .msg-page-header {
+    /* ---- Full-viewport layout ---- */
+    html, body {
+      height: 100dvh;
+      overflow: hidden;
+      overflow-x: hidden;
+      max-width: 100vw;
+      padding: 0;
+      margin: 0;
       display: flex;
-      align-items: center;
-      gap: 1rem;
-      padding: 1rem 1rem 0;
-      max-width: 800px;
-      margin: 0 auto;
+      flex-direction: column;
     }
-    .back-btn {
-      background: none;
-      border: 1px solid #334155;
-      color: #94a3b8;
-      font-size: 0.85rem;
-      cursor: pointer;
-      padding: 0.35rem 0.75rem;
-      border-radius: 6px;
-      font-family: inherit;
-      text-decoration: none;
-      transition: color 0.2s, border-color 0.2s;
-      display: inline-block;
+    header {
       flex-shrink: 0;
+      margin-bottom: 0 !important;
+      max-width: 100vw;
     }
-    .back-btn:hover { color: #e2e8f0; border-color: #64748b; }
-    .msg-page-header h2 { margin: 0; font-size: 1.1rem; color: #e2e8f0; flex: 1; }
-
     .msg-page-body {
-      max-width: 800px;
+      flex: 1;
+      min-height: 0;
+      max-width: 820px;
+      width: 100%;
       margin: 0 auto;
       display: flex;
       flex-direction: column;
-      height: calc(100vh - 4.5rem);
-      padding: 0 1rem;
     }
 
-    /* ---- Channel tabs ---- */
-    .ch-tabs {
+    /* ---- Channel list view ---- */
+    .ch-list-view {
+      flex: 1;
+      min-height: 0;
       display: flex;
-      gap: 0.4rem;
-      padding: 0.75rem 0 0;
-      flex-wrap: wrap;
-      flex-shrink: 0;
+      flex-direction: column;
+      overflow: hidden;
     }
-    .ch-tab {
-      background: none;
-      border: 1px solid #334155;
-      color: #64748b;
-      font-size: 0.8rem;
-      padding: 0.25rem 0.75rem;
-      border-radius: 20px;
-      cursor: pointer;
-      font-family: inherit;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
-    }
-    .ch-tab:hover { color: #94a3b8; border-color: #475569; }
-    .ch-tab.active {
-      background: #1e40af;
-      border-color: #3b82f6;
-      color: #e2e8f0;
-    }
-
-    /* ---- Filter bar ---- */
-    .msg-filter-bar {
+    .ch-list-header {
       display: flex;
-      gap: 0.5rem;
       align-items: center;
-      padding: 0.4rem 0 0;
+      gap: 0.75rem;
+      padding: 0.8rem 0.9rem 0.6rem;
       flex-shrink: 0;
+      border-bottom: 1px solid #1e293b;
     }
-    .msg-filter-label {
-      font-size: 0.72rem;
+    .ch-list-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      flex: 1;
+    }
+    .ch-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.6rem 0.7rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      -webkit-overflow-scrolling: touch;
+    }
+    .ch-list::-webkit-scrollbar { width: 3px; }
+    .ch-list::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
+    .ch-card {
+      display: flex;
+      align-items: stretch;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      cursor: pointer;
+      overflow: hidden;
+      transition: border-color 0.15s, background 0.15s;
+      min-height: 4.2rem;
+    }
+    .ch-card:hover { background: #131f35; border-color: #334155; }
+    .ch-card-accent { width: 4px; flex-shrink: 0; }
+    .ch-card-content {
+      flex: 1;
+      min-width: 0;
+      padding: 0.7rem 0.9rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.2rem;
+    }
+    .ch-card-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .ch-card-name {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ch-card-time {
+      font-size: 0.7rem;
       color: #475569;
       white-space: nowrap;
+      flex-shrink: 0;
     }
-    .msg-hours-select {
-      background: #0f172a;
+    .ch-unread-badge {
+      background: #ef4444;
+      color: #fff;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.1rem 0.5rem;
+      border-radius: 99px;
+      min-width: 1.3rem;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .ch-card-preview {
+      font-size: 0.77rem;
+      color: #64748b;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .ch-empty {
+      text-align: center;
+      color: #475569;
+      font-size: 0.88rem;
+      margin-top: 3rem;
+    }
+
+    /* ---- Conversation view ---- */
+    .conv-view {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .conv-top {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.9rem;
+      border-bottom: 1px solid #1e293b;
+      flex-shrink: 0;
+    }
+    .conv-back-btn {
+      background: none;
       border: 1px solid #334155;
       color: #94a3b8;
-      font-size: 0.75rem;
-      padding: 0.2rem 0.5rem;
-      border-radius: 6px;
+      font-size: 1rem;
+      width: 2.2rem;
+      height: 2.2rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s, border-color 0.15s;
+      flex-shrink: 0;
+      font-family: inherit;
+    }
+    .conv-back-btn:hover { color: #e2e8f0; border-color: #64748b; }
+    .conv-ch-name {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* ---- Filter controls (in conv-top) ---- */
+    .msg-hours-select {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      padding: 0 0.6rem;
+      height: 2.2rem;
+      border-radius: 8px;
       font-family: inherit;
       outline: none;
       cursor: pointer;
+      flex-shrink: 0;
     }
     .msg-hours-select:focus { border-color: #3b82f6; }
     .msg-search {
-      background: #0f172a;
+      background: #1e293b;
       border: 1px solid #334155;
       color: #e2e8f0;
-      font-size: 0.75rem;
-      padding: 0.2rem 0.65rem;
-      border-radius: 6px;
+      font-size: 0.85rem;
+      padding: 0 0.75rem;
+      height: 2.2rem;
+      border-radius: 8px;
       font-family: inherit;
       flex: 1;
       min-width: 0;
@@ -107,32 +204,55 @@
     .msg-search:focus { border-color: #3b82f6; }
     .msg-search::placeholder { color: #475569; }
     .msg-filter-count {
-      font-size: 0.7rem;
+      font-size: 0.72rem;
       color: #475569;
       white-space: nowrap;
+      flex-shrink: 0;
     }
 
     /* ---- Message list ---- */
     .msg-list {
       flex: 1;
       overflow-y: auto;
-      padding: 0.75rem 0;
+      padding: 0.5rem 0.9rem 0.75rem;
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0;
+      -webkit-overflow-scrolling: touch;
     }
     .msg-empty {
       text-align: center;
       color: #475569;
-      font-size: 0.85rem;
-      margin-top: 2rem;
+      font-size: 0.88rem;
+      margin-top: 3rem;
     }
 
-    /* Individual message bubble */
+    /* Date separator */
+    .msg-date-sep {
+      text-align: center;
+      font-size: 0.72rem;
+      color: #475569;
+      padding: 1rem 0 0.5rem;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .msg-date-sep::before, .msg-date-sep::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 28%;
+      height: 1px;
+      background: #1e293b;
+    }
+    .msg-date-sep::before { left: 0; top: calc(50% + 0.25rem); }
+    .msg-date-sep::after  { right: 0; top: calc(50% + 0.25rem); }
+
+    /* ---- Message item ---- */
     .msg-item {
       display: flex;
       flex-direction: column;
-      max-width: 78%;
+      max-width: 80%;
+      margin-bottom: 0.5rem;
     }
     .msg-item.outgoing {
       align-self: flex-end;
@@ -142,216 +262,116 @@
       align-self: flex-start;
       align-items: flex-start;
     }
-    .msg-sender {
-      font-size: 0.7rem;
-      color: #64748b;
-      margin-bottom: 0.2rem;
-      padding: 0 0.3rem;
+    /* Tight grouping — same sender, within a minute */
+    .msg-item.grouped { margin-top: -0.2rem; margin-bottom: 0.15rem; }
+    .msg-item.grouped .msg-meta { display: none; }
+
+    /* Sender / meta row */
+    .msg-meta {
       display: flex;
       align-items: center;
-      gap: 0.25rem;
+      gap: 0.4rem;
+      padding: 0 0.5rem 0.2rem;
+      flex-wrap: wrap;
     }
-    .msg-sender-name.has-route {
-      cursor: pointer;
-      text-decoration: underline dotted;
-      text-underline-offset: 2px;
+    .msg-sender-name {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #cbd5e1;
     }
-    .msg-sender-name.has-route:hover { color: #94a3b8; }
     .msg-hops {
-      font-size: 0.62rem;
+      font-size: 0.68rem;
       color: #475569;
       background: #0f172a;
-      border: 1px solid #334155;
-      border-radius: 3px;
-      padding: 0.05rem 0.3rem;
+      border: 1px solid #1e293b;
+      border-radius: 4px;
+      padding: 0.05rem 0.35rem;
       white-space: nowrap;
     }
-    .msg-reply-btn {
+    .msg-hops.direct { color: #4ade80; border-color: #14532d; }
+
+    .msg-route-btn {
       background: none;
-      border: none;
-      color: #475569;
-      font-size: 0.85rem;
+      border: 1px solid #1e293b;
+      color: #38bdf8;
+      font-size: 0.68rem;
       cursor: pointer;
-      padding: 0 0.1rem;
-      line-height: 1;
-      opacity: 0;
-      transition: opacity 0.15s, color 0.15s;
+      padding: 0.05rem 0.4rem;
+      border-radius: 4px;
+      line-height: 1.5;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
     }
-    .msg-item:hover .msg-reply-btn { opacity: 1; }
-    .msg-reply-btn:hover { color: #38bdf8; }
+    .msg-route-btn:hover { color: #7dd3fc; border-color: #38bdf8; }
+
+    /* Route info panel */
     .msg-route-info {
-      font-size: 0.65rem;
+      font-size: 0.7rem;
       color: #64748b;
-      padding: 0 0.3rem 0.2rem;
-      display: flex;
+      padding: 0.15rem 0.5rem 0.3rem;
+      display: none;
       align-items: center;
       flex-wrap: wrap;
-      gap: 0.2rem;
-      overflow-x: auto;
+      gap: 0.25rem;
     }
+    .msg-route-info.expanded { display: flex; }
     .msg-route-info .route-node {
       background: #0f172a;
       border: 1px solid #334155;
       border-radius: 4px;
-      padding: 0.05rem 0.35rem;
+      padding: 0.05rem 0.4rem;
       font-family: monospace;
-      font-size: 0.65rem;
+      font-size: 0.68rem;
       color: #38bdf8;
-      cursor: default;
       white-space: nowrap;
-      position: relative;
     }
-    .msg-route-info .route-node.known-node {
-      border-color: #38bdf8;
-      color: #7dd3fc;
-    }
-    .msg-route-info .route-node[title]:hover::after {
-      content: attr(title);
-      position: absolute;
-      bottom: calc(100% + 4px);
-      left: 50%;
-      transform: translateX(-50%);
-      background: #1e293b;
-      border: 1px solid #475569;
-      color: #e2e8f0;
-      font-family: inherit;
-      font-size: 0.7rem;
-      padding: 0.2rem 0.5rem;
-      border-radius: 4px;
-      white-space: nowrap;
-      pointer-events: none;
-      z-index: 10;
-    }
-    .msg-route-info .route-arrow {
-      color: #475569;
-      font-size: 0.6rem;
-    }
-    .msg-route-info .route-unavail {
-      color: #475569;
-      font-style: italic;
-    }
+    .msg-route-info .route-node.known-node { border-color: #38bdf8; color: #7dd3fc; }
+    .msg-route-info .route-arrow { color: #334155; font-size: 0.6rem; }
+    .msg-route-info .route-unavail { color: #475569; font-style: italic; }
+
+    /* Bubble */
     .msg-bubble {
-      padding: 0.5rem 0.75rem;
-      border-radius: 12px;
-      font-size: 0.85rem;
-      line-height: 1.45;
+      padding: 0.65rem 1rem;
+      border-radius: 18px;
+      font-size: 0.95rem;
+      line-height: 1.55;
       word-break: break-word;
     }
     .msg-item.outgoing .msg-bubble {
-      background: #1e3a5f;
-      border: 1px solid #2563eb;
-      color: #e2e8f0;
-      border-bottom-right-radius: 3px;
+      background: #1d4ed8;
+      color: #f0f6ff;
+      border-bottom-right-radius: 5px;
     }
     .msg-item.incoming .msg-bubble {
       background: #1e293b;
-      border: 1px solid #334155;
-      color: #e2e8f0;
-      border-bottom-left-radius: 3px;
-    }
-    .msg-time {
-      font-size: 0.65rem;
-      color: #475569;
-      margin-top: 0.2rem;
-      padding: 0 0.3rem;
+      color: #f1f5f9;
+      border-bottom-left-radius: 5px;
     }
 
-    /* ---- Compose area ---- */
-    .msg-compose {
-      flex-shrink: 0;
-      padding: 0.75rem 0 1rem;
-      border-top: 1px solid #1e293b;
+    /* Footer: time + acks + reply in one row */
+    .msg-footer {
       display: flex;
+      align-items: center;
       gap: 0.5rem;
-      align-items: flex-end;
+      padding: 0.25rem 0.5rem 0;
+      flex-wrap: wrap;
     }
-    .msg-input {
-      flex: 1;
-      background: #1e293b;
-      border: 1px solid #334155;
-      color: #e2e8f0;
-      border-radius: 8px;
-      padding: 0.55rem 0.75rem;
-      font-size: 0.85rem;
-      font-family: inherit;
-      resize: none;
-      min-height: 2.4rem;
-      max-height: 8rem;
-      line-height: 1.4;
-      overflow-y: auto;
+    .msg-item.outgoing .msg-footer { flex-direction: row-reverse; }
+    .msg-time {
+      font-size: 0.7rem;
+      color: #475569;
     }
-    .msg-input:focus {
-      outline: none;
-      border-color: #3b82f6;
-    }
-    .msg-input.reply-mode { border-color: #0ea5e9; }
-    .msg-input::placeholder { color: #475569; }
-    .msg-send-btn {
-      background: #1e40af;
-      border: 1px solid #3b82f6;
-      color: #e2e8f0;
-      border-radius: 8px;
-      padding: 0.55rem 1.1rem;
-      font-size: 0.85rem;
-      font-family: inherit;
-      cursor: pointer;
-      transition: background 0.15s;
-      white-space: nowrap;
-    }
-    .msg-send-btn:hover:not(:disabled) { background: #1d4ed8; }
-    .msg-send-btn:disabled { opacity: 0.45; cursor: default; }
-
-    /* ---- Status bar ---- */
-    .msg-status {
-      font-size: 0.75rem;
-      padding: 0.25rem 0;
-      min-height: 1.2rem;
-      color: #64748b;
-      flex-shrink: 0;
-    }
-    .msg-status.err { color: #ef4444; }
-    .msg-status.ok  { color: #22c55e; }
-
-    /* ---- Compose label ---- */
-    .msg-compose-label {
-      flex-shrink: 0;
-      font-size: 0.72rem;
-      color: #64748b;
-      padding: 0.3rem 0 0.1rem;
-      min-height: 1.1rem;
-    }
-    .msg-compose-label strong { color: #38bdf8; }
-    .compose-cancel-btn {
-      background: none;
-      border: 1px solid #334155;
-      color: #64748b;
-      font-size: 0.65rem;
-      cursor: pointer;
-      padding: 0.05rem 0.4rem;
-      border-radius: 3px;
-      margin-left: 0.4rem;
-      font-family: inherit;
-    }
-    .compose-cancel-btn:hover { color: #e2e8f0; border-color: #64748b; }
-
-    /* Seen-by count under outgoing messages */
     .msg-acks {
       font-size: 0.7rem;
       font-weight: 600;
       color: #22c55e;
-      padding: 0.2rem 0.3rem 0;
-      text-align: right;
       display: flex;
       align-items: center;
-      justify-content: flex-end;
-      gap: 0.3rem;
+      gap: 0.25rem;
     }
     .msg-acks-zero { color: #475569; font-weight: 400; }
+    .msg-acks-waiting { color: #f59e0b; font-weight: 400; }
     .msg-acks-fail { color: #ef4444; }
-    .msg-acks-waiting {
-      color: #f59e0b;
-      font-weight: 400;
-    }
     .ack-pulse {
       display: inline-block;
       width: 6px; height: 6px;
@@ -364,66 +384,208 @@
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.3; transform: scale(0.7); }
     }
-    .ack-seen-flash {
-      animation: ack-flash 0.8s ease-out;
-    }
     @keyframes ack-flash {
       0% { color: #86efac; transform: scale(1.15); }
       100% { color: #22c55e; transform: scale(1); }
     }
+    .ack-seen-flash { animation: ack-flash 0.8s ease-out; }
 
-    /* Scrollbar styling */
-    .msg-list::-webkit-scrollbar { width: 4px; }
+    /* Reply button — in footer, proper tap target */
+    .msg-reply-btn {
+      background: none;
+      border: none;
+      color: #475569;
+      font-size: 0.75rem;
+      cursor: pointer;
+      padding: 0.2rem 0.4rem;
+      border-radius: 6px;
+      line-height: 1.4;
+      transition: color 0.15s, background 0.15s;
+      white-space: nowrap;
+      min-height: 2rem;
+      display: flex;
+      align-items: center;
+    }
+    .msg-reply-btn:hover, .msg-reply-btn:active {
+      color: #38bdf8;
+      background: #0c1a2e;
+    }
+
+    /* ---- Compose area ---- */
+    .msg-compose-wrap {
+      flex-shrink: 0;
+      border-top: 1px solid #1e293b;
+      background: #0f172a;
+      padding: 0.6rem 0.9rem;
+      padding-bottom: calc(0.6rem + env(safe-area-inset-bottom, 0px));
+    }
+    .msg-compose-label {
+      font-size: 0.75rem;
+      color: #64748b;
+      padding: 0 0.1rem 0.35rem;
+      min-height: 0;
+    }
+    .msg-compose-label:empty { display: none; }
+    .msg-compose-label strong { color: #38bdf8; }
+    .compose-cancel-btn {
+      background: none;
+      border: 1px solid #334155;
+      color: #64748b;
+      font-size: 0.7rem;
+      cursor: pointer;
+      padding: 0.1rem 0.5rem;
+      border-radius: 4px;
+      margin-left: 0.4rem;
+      font-family: inherit;
+      vertical-align: middle;
+    }
+    .compose-cancel-btn:hover { color: #e2e8f0; border-color: #64748b; }
+    .msg-compose {
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-end;
+    }
+    .msg-input {
+      flex: 1;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      border-radius: 12px;
+      padding: 0.65rem 1rem;
+      font-size: 0.95rem;
+      font-family: inherit;
+      resize: none;
+      min-height: 2.75rem;
+      max-height: 8rem;
+      line-height: 1.45;
+      overflow-y: auto;
+    }
+    .msg-input:focus { outline: none; border-color: #3b82f6; }
+    .msg-input.reply-mode { border-color: #0ea5e9; }
+    .msg-input::placeholder { color: #475569; }
+    .msg-send-btn {
+      background: #1d4ed8;
+      border: 1px solid #3b82f6;
+      color: #f0f6ff;
+      border-radius: 12px;
+      width: 2.75rem;
+      height: 2.75rem;
+      font-size: 1.15rem;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .msg-send-btn:hover:not(:disabled) { background: #1e40af; }
+    .msg-send-btn:disabled { opacity: 0.35; cursor: default; }
+
+    /* ---- Status bar ---- */
+    .msg-status {
+      font-size: 0.75rem;
+      padding: 0 0.1rem 0.25rem;
+      min-height: 0;
+      color: #64748b;
+    }
+    .msg-status:empty { display: none; }
+    .msg-status.err { color: #ef4444; }
+    .msg-status.ok  { color: #22c55e; }
+
+    /* Scrollbar */
+    .msg-list::-webkit-scrollbar { width: 3px; }
     .msg-list::-webkit-scrollbar-track { background: transparent; }
-    .msg-list::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+    .msg-list::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
+
+    /* ---- Mobile ---- */
+    @media (max-width: 600px) {
+      .msg-item { max-width: 92%; }
+      .msg-bubble { font-size: 0.95rem; padding: 0.6rem 0.9rem; }
+      .ch-list { padding: 0.4rem 0.4rem; }
+      .conv-top { padding: 0.4rem 0.6rem; gap: 0.35rem; }
+      .msg-list { padding: 0.4rem 0.65rem 0.5rem; }
+      .msg-compose-wrap { padding: 0.5rem 0.65rem; padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)); }
+      .msg-search { min-width: 0; width: 6rem; }
+    }
   </style>
 </head>
 <body>
 
-  <div class="msg-page-header">
-    <a href="/" class="back-btn">&larr; Dashboard</a>
-    <a href="/map" class="back-btn">Map</a>
-    <h2>Messages</h2>
-  </div>
+  <header>
+    <div class="header-title">
+      <h1>Messages</h1>
+      <div class="header-meta">
+        <div class="header-conn-mini"><span class="status-dot unknown" id="miniConnDot"></span><span id="miniConnText">—</span></div>
+      </div>
+    </div>
+    <nav class="nav-group">
+      <a href="/" class="nav-btn" title="Dashboard">Dashboard</a>
+      <a href="/map" class="nav-btn" title="Network Map">Map</a>
+      <a href="/messages" class="nav-btn nav-btn-active" title="Messages">Messages</a>
+      <a href="/packets" class="nav-btn" title="Recent Packets">Packets</a>
+      <a href="/contacts" class="nav-btn" title="Contacts">Contacts</a>
+      <a href="/logs" class="nav-btn" title="Activity Logs">Logs</a>
+      <a href="/settings" class="nav-btn nav-settings" title="Settings">&#9881;</a>
+    </nav>
+  </header>
 
   <div class="msg-page-body">
-    <div class="ch-tabs" id="chTabs"></div>
-    <div class="msg-filter-bar">
-      <span class="msg-filter-label">Show last</span>
-      <select class="msg-hours-select" id="msgHours" onchange="onHoursChange()">
-        <option value="1">1 hour</option>
-        <option value="6">6 hours</option>
-        <option value="12">12 hours</option>
-        <option value="24">24 hours</option>
-        <option value="48" selected>48 hours</option>
-        <option value="168">7 days</option>
-        <option value="720">30 days</option>
-      </select>
-      <input class="msg-search" id="msgSearch" type="search" placeholder="Search messages…" oninput="applySearch()">
-      <span class="msg-filter-count" id="msgFilterCount"></span>
+
+    <!-- View 1: Channel list (default) -->
+    <div id="chListView" class="ch-list-view">
+      <div class="ch-list-header">
+        <span class="ch-list-title">Messages</span>
+        <select class="msg-hours-select" id="msgHoursGlobal" onchange="onHoursChangeGlobal()">
+          <option value="24">24h</option>
+          <option value="48" selected>48h</option>
+          <option value="168">7d</option>
+          <option value="720">30d</option>
+        </select>
+      </div>
+      <div id="chList" class="ch-list"></div>
     </div>
-    <div class="msg-list" id="msgList">
-      <div class="msg-empty">Loading messages&hellip;</div>
+
+    <!-- View 2: Conversation (shown on channel select) -->
+    <div id="convView" class="conv-view" style="display:none">
+      <div class="conv-top">
+        <button class="conv-back-btn" onclick="showChannelList()" title="Back to channels">&#8592;</button>
+        <span class="conv-ch-name" id="convChName"></span>
+        <input class="msg-search" id="msgSearch" type="search" placeholder="Search&hellip;" oninput="applySearch()">
+        <select class="msg-hours-select" id="msgHours" onchange="onHoursChange()">
+          <option value="1">1h</option>
+          <option value="6">6h</option>
+          <option value="12">12h</option>
+          <option value="24">24h</option>
+          <option value="48" selected>48h</option>
+          <option value="168">7d</option>
+          <option value="720">30d</option>
+        </select>
+        <span class="msg-filter-count" id="msgFilterCount"></span>
+      </div>
+      <div class="msg-list" id="msgList">
+        <div class="msg-empty">Loading messages&hellip;</div>
+      </div>
+      <div class="msg-compose-wrap">
+        <div class="msg-status" id="msgStatus"></div>
+        <div class="msg-compose-label" id="composeLabel"></div>
+        <div class="msg-compose">
+          <textarea class="msg-input" id="msgInput" placeholder="Type a message&hellip;" rows="1"></textarea>
+          <button class="msg-send-btn" id="sendBtn" onclick="sendMessage()" title="Send">&#10148;</button>
+        </div>
+      </div>
     </div>
-    <div class="msg-status" id="msgStatus"></div>
-    <div class="msg-compose-label" id="composeLabel"></div>
-    <div class="msg-compose">
-      <textarea class="msg-input" id="msgInput" placeholder="Type a message&hellip;" rows="1"></textarea>
-      <button class="msg-send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
-    </div>
+
   </div>
 
   <script>
-    var _channels = [];          // [{name, idx}] from settings
-    var _activeChannel = null;   // {name, idx} or null (= "All")
-    var _replyContact = null;    // {pubkey, name} for direct replies, or null
+    var _channels = [];
+    var _activeChannel = null;
+    var _replyContact = null;
     var _refreshTimer = null;
-    var _contactRoutes = {};     // pubkey-prefix -> {hops, route_path, name}
-    var _nodeNames = {};         // 2-char hex ID -> name (from node_names cache)
-    var _cachedRoutes = {};      // pubkey_prefix (upper) -> {hops, path} from contact-routes cache
-    var _nodeIdChars = 2;        // loaded from settings
-
-    // --- Utilities ---
+    var _contactRoutes = {};
+    var _nodeNames = {};
+    var _cachedRoutes = {};
+    var _nodeIdChars = 2;
 
     function escapeHtml(str) {
       var d = document.createElement('div');
@@ -440,13 +602,20 @@
       return (d.getMonth()+1) + '/' + d.getDate() + ' ' + time;
     }
 
+    function fmtDate(ts) {
+      var d = new Date(ts * 1000);
+      var now = new Date();
+      if (d.toDateString() === now.toDateString()) return 'Today';
+      var yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+      if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+      return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+
     function setStatus(msg, cls) {
       var el = document.getElementById('msgStatus');
       el.textContent = msg;
       el.className = 'msg-status' + (cls ? ' ' + cls : '');
     }
-
-    // --- Contact route lookup ---
 
     function loadContactRoutes() {
       fetch('/api/map')
@@ -456,19 +625,15 @@
           (data.contacts || []).concat(data.repeaters || []).forEach(function(c) {
             if (!c.pubkey) return;
             var pk = c.pubkey.toLowerCase();
-            // Index by full key, 4-char prefix, and 2-char prefix for flexible matching
             _contactRoutes[pk] = c;
             if (pk.length >= 4) _contactRoutes[pk.substring(0, 4)] = c;
             if (pk.length >= 2) _contactRoutes[pk.substring(0, 2)] = c;
           });
-        })
-        .catch(function() {});
-
+        }).catch(function() {});
       fetch('/api/node-names')
         .then(function(r) { return r.json(); })
         .then(function(data) { _nodeNames = data || {}; })
         .catch(function() {});
-
       fetch('/api/contact-routes')
         .then(function(r) { return r.json(); })
         .then(function(data) { _cachedRoutes = data || {}; })
@@ -478,37 +643,26 @@
     function lookupContact(pubkeyPrefix) {
       if (!pubkeyPrefix) return null;
       var p = pubkeyPrefix.toLowerCase();
-      return _contactRoutes[p] ||
-             _contactRoutes[p.substring(0, 4)] ||
-             _contactRoutes[p.substring(0, 2)] ||
-             null;
+      return _contactRoutes[p] || _contactRoutes[p.substring(0, 4)] || _contactRoutes[p.substring(0, 2)] || null;
     }
-
-    // --- Route chip renderer ---
 
     function makeNode(hexStr) {
       var el = document.createElement('span');
       el.className = 'route-node';
       el.textContent = hexStr.substring(0, _nodeIdChars).toUpperCase();
-      // Try node_names cache first (2-char hex ID → name)
       var nodeName = _nodeNames[hexStr.toUpperCase()] || _nodeNames[hexStr.toLowerCase()];
       if (!nodeName) {
         var contact = lookupContact(hexStr);
         if (contact && contact.name) nodeName = contact.name;
       }
-      if (nodeName) {
-        // Known: blue border + highlight, name shown on hover
-        el.classList.add('known-node');
-        el.title = nodeName;
-      }
-      // Unknown: stays grey (default .route-node style)
+      if (nodeName) { el.classList.add('known-node'); el.title = nodeName; }
       return el;
     }
 
     function makeArrow() {
       var el = document.createElement('span');
       el.className = 'route-arrow';
-      el.textContent = '\u2192';
+      el.textContent = '→';
       return el;
     }
 
@@ -517,33 +671,29 @@
       if (hops === 0) {
         var d = document.createElement('span');
         d.style.color = '#22c55e';
-        d.textContent = 'Direct connection to you';
+        d.textContent = 'Direct';
         container.appendChild(d);
         return;
       }
       if (!routePath) {
         var u = document.createElement('span');
         u.className = 'route-unavail';
-        u.textContent = hops + ' hop' + (hops !== 1 ? 's' : '') + ' \u2014 route not available';
+        u.textContent = hops + ' hop' + (hops !== 1 ? 's' : '') + ' — path unknown';
         container.appendChild(u);
         return;
       }
-      // Sender origin node
       var origin = document.createElement('span');
       origin.className = 'route-node known-node';
       origin.textContent = senderName;
       container.appendChild(origin);
       container.appendChild(makeArrow());
-
-      // Parse segments — split on " > " or ","
       var segs = routePath.split(/\s*[>,]\s*/);
-      segs.forEach(function(seg, i) {
+      segs.forEach(function(seg) {
         seg = seg.trim();
         if (!seg) return;
         container.appendChild(makeNode(seg));
         container.appendChild(makeArrow());
       });
-
       var you = document.createElement('span');
       you.className = 'route-node known-node';
       you.style.color = '#22c55e';
@@ -552,20 +702,153 @@
       container.appendChild(you);
     }
 
-    // --- Channel tabs ---
+    /* ---- Channel list logic ---- */
+    var _channelMessages = {};
+    var _CHANNEL_COLORS = ['#38bdf8','#4ade80','#c084fc','#fb923c','#f43f5e','#facc15'];
+
+    function getChannelColor(idx) {
+      return _CHANNEL_COLORS[idx % _CHANNEL_COLORS.length];
+    }
+
+    function getUnreadCount(chIdx) {
+      var seen = parseFloat(localStorage.getItem('meshcore_ch_seen_' + chIdx) || '0');
+      var msgs = _channelMessages[chIdx] || [];
+      return msgs.filter(function(m) { return m.ts > seen && m.direction !== 'out'; }).length;
+    }
+
+    function markChannelSeen(chIdx) {
+      var msgs = _channelMessages[chIdx] || [];
+      if (msgs.length === 0) return;
+      var ts = Math.max.apply(null, msgs.map(function(m) { return m.ts; }));
+      try { localStorage.setItem('meshcore_ch_seen_' + chIdx, ts.toString()); } catch(e) {}
+    }
+
+    function showChannelList() {
+      _activeChannel = null;
+      _replyContact = null;
+      var lv = document.getElementById('chListView');
+      var cv = document.getElementById('convView');
+      if (lv) lv.style.display = '';
+      if (cv) cv.style.display = 'none';
+      loadChannelData();
+    }
+
+    function openChannel(ch) {
+      _activeChannel = ch;
+      _replyContact = null;
+      markChannelSeen(ch.idx);
+      try { localStorage.setItem('meshcore_last_msg_seen', (Date.now() / 1000).toString()); } catch(e) {}
+      var lv = document.getElementById('chListView');
+      var cv = document.getElementById('convView');
+      if (lv) lv.style.display = 'none';
+      if (cv) cv.style.display = '';
+      var nameEl = document.getElementById('convChName');
+      if (nameEl) nameEl.textContent = ch.name;
+      updatePlaceholder();
+      loadMessages();
+    }
+
+    function onHoursChangeGlobal() { loadChannelData(); }
+
+    function loadChannelData() {
+      var hoursEl = document.getElementById('msgHoursGlobal');
+      var hours = hoursEl ? hoursEl.value : '48';
+      fetch('/api/messages?hours=' + hours + '&limit=1000')
+        .then(function(r) { return r.json(); })
+        .then(function(msgs) {
+          if (!Array.isArray(msgs)) msgs = [];
+          _channelMessages = {};
+          msgs.forEach(function(m) {
+            var idx = m.channel_idx != null ? m.channel_idx : 0;
+            if (!_channelMessages[idx]) _channelMessages[idx] = [];
+            _channelMessages[idx].push(m);
+          });
+          Object.keys(_channelMessages).forEach(function(idx) {
+            _channelMessages[idx].sort(function(a, b) { return b.ts - a.ts; });
+          });
+          buildChannelList();
+        })
+        .catch(function() { buildChannelList(); });
+    }
+
+    function buildChannelList() {
+      var list = document.getElementById('chList');
+      if (!list) return;
+      if (!_channels || _channels.length === 0) {
+        list.innerHTML = '<div class="ch-empty">No channels found</div>';
+        return;
+      }
+      list.innerHTML = '';
+      _channels.forEach(function(ch) {
+        var unread = getUnreadCount(ch.idx);
+        var msgs = _channelMessages[ch.idx] || [];
+        var lastMsg = msgs.length > 0 ? msgs[0] : null;
+        var preview = '';
+        if (lastMsg) {
+          var prefix = lastMsg.direction === 'out' ? 'You: ' : (lastMsg.sender_name ? lastMsg.sender_name + ': ' : '');
+          preview = prefix + (lastMsg.text || '');
+          if (preview.length > 65) preview = preview.substring(0, 65) + '…';
+        } else {
+          preview = 'No messages yet';
+        }
+        var timeStr = lastMsg ? fmtTime(lastMsg.ts) : '';
+        var color = getChannelColor(ch.idx);
+
+        var card = document.createElement('div');
+        card.className = 'ch-card';
+        (function(c) { card.onclick = function() { openChannel(c); }; })(ch);
+
+        var accent = document.createElement('div');
+        accent.className = 'ch-card-accent';
+        accent.style.background = color;
+        card.appendChild(accent);
+
+        var content = document.createElement('div');
+        content.className = 'ch-card-content';
+
+        var row = document.createElement('div');
+        row.className = 'ch-card-row';
+
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'ch-card-name';
+        nameSpan.textContent = ch.name;
+        row.appendChild(nameSpan);
+
+        if (timeStr) {
+          var timeSpan = document.createElement('span');
+          timeSpan.className = 'ch-card-time';
+          timeSpan.textContent = timeStr;
+          row.appendChild(timeSpan);
+        }
+
+        if (unread > 0) {
+          var badge = document.createElement('span');
+          badge.className = 'ch-unread-badge';
+          badge.textContent = unread > 99 ? '99+' : unread;
+          row.appendChild(badge);
+        }
+        content.appendChild(row);
+
+        var prevSpan = document.createElement('div');
+        prevSpan.className = 'ch-card-preview';
+        prevSpan.textContent = preview;
+        content.appendChild(prevSpan);
+
+        card.appendChild(content);
+        list.appendChild(card);
+      });
+    }
+    /* ---- End channel list logic ---- */
 
     function buildTabs() {
       var tabs = document.getElementById('chTabs');
       tabs.innerHTML = '';
-
-      // "All" tab — active only when no channel and no reply
       var allActive = (_activeChannel === null && _replyContact === null);
       var allTab = document.createElement('button');
       allTab.className = 'ch-tab' + (allActive ? ' active' : '');
       allTab.textContent = 'All';
       allTab.onclick = function() { selectChannel(null); };
       tabs.appendChild(allTab);
-
       _channels.forEach(function(ch) {
         var t = document.createElement('button');
         var isActive = _activeChannel && _activeChannel.idx === ch.idx && !_replyContact;
@@ -584,15 +867,10 @@
       updatePlaceholder();
     }
 
-    // --- Reply ---
-
     function setReply(pubkey, name, channelIdx) {
       var input = document.getElementById('msgInput');
       var prefix = '{' + name + ':} ';
-
       if (!pubkey) {
-        // Channel message — no pubkey, so reply goes back to the same channel.
-        // Ensure that channel is selected, then just pre-fill the name.
         if (channelIdx !== null && channelIdx !== undefined) {
           for (var i = 0; i < _channels.length; i++) {
             if (_channels[i].idx === channelIdx) { _activeChannel = _channels[i]; break; }
@@ -601,7 +879,6 @@
         _replyContact = null;
         input.value = prefix;
       } else {
-        // Direct message — toggle DM reply mode
         if (_replyContact && _replyContact.pubkey === pubkey) {
           _replyContact = null;
           if (input.value === prefix) input.value = '';
@@ -610,10 +887,8 @@
           input.value = prefix;
         }
       }
-
       input.style.height = '';
       input.style.height = Math.min(input.scrollHeight, 128) + 'px';
-      buildTabs();
       updatePlaceholder();
       input.focus();
       var len = input.value.length;
@@ -622,7 +897,6 @@
 
     function cancelReply() {
       _replyContact = null;
-      buildTabs();
       updatePlaceholder();
     }
 
@@ -630,46 +904,35 @@
       var input = document.getElementById('msgInput');
       var label = document.getElementById('composeLabel');
       var btn = document.getElementById('sendBtn');
-
       if (_replyContact) {
-        input.placeholder = 'Reply to ' + _replyContact.name + '\u2026';
+        input.placeholder = 'Reply to ' + _replyContact.name + '…';
         input.classList.add('reply-mode');
         btn.disabled = false;
         if (label) label.innerHTML =
-          '&#8617; Direct reply to <strong>' + escapeHtml(_replyContact.name) + '</strong>' +
+          '&#8617; Direct to <strong>' + escapeHtml(_replyContact.name) + '</strong>' +
           '<button class="compose-cancel-btn" onclick="cancelReply()">&#215; Cancel</button>';
       } else if (_activeChannel === null) {
-        input.placeholder = 'Select a channel to send a message\u2026';
+        input.placeholder = 'Select a channel to send…';
         input.classList.remove('reply-mode');
         btn.disabled = true;
         if (label) label.innerHTML = '';
       } else {
-        input.placeholder = 'Type a message\u2026 (Shift+Enter for new line)';
+        input.placeholder = 'Message ' + _activeChannel.name + '…';
         input.classList.remove('reply-mode');
         btn.disabled = false;
-        if (label) label.innerHTML = 'Sending to <strong>' + escapeHtml(_activeChannel.name) + '</strong>';
+        if (label) label.innerHTML = '';
       }
     }
 
-    // --- Messages ---
-
-    var _allMessages = [];  // raw API response, newest-first
-
-    function onHoursChange() {
-      loadMessages();
-    }
-
-    function applySearch() {
-      renderMessages(_allMessages);
-    }
+    var _allMessages = [];
+    function onHoursChange() { loadMessages(); }
+    function applySearch() { renderMessages(_allMessages); }
 
     function loadMessages() {
       var sel = document.getElementById('msgHours');
       var hours = sel ? sel.value : '48';
       var url = '/api/messages?hours=' + hours + '&limit=500';
-      if (_activeChannel !== null) {
-        url += '&channel_idx=' + _activeChannel.idx;
-      }
+      if (_activeChannel !== null) url += '&channel_idx=' + _activeChannel.idx;
       fetch(url)
         .then(function(r) { return r.json(); })
         .then(function(msgs) {
@@ -678,19 +941,15 @@
           if (msgs.length > 0) {
             var latest = msgs[0].ts;
             var stored = parseFloat(localStorage.getItem('meshcore_last_msg_seen') || '0');
-            if (latest > stored) {
-              localStorage.setItem('meshcore_last_msg_seen', latest.toString());
-            }
+            if (latest > stored) localStorage.setItem('meshcore_last_msg_seen', latest.toString());
           }
-        })
-        .catch(function() {});
+        }).catch(function() {});
     }
 
     function renderMessages(msgs) {
       var list = document.getElementById('msgList');
-      var wasAtBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+      var wasAtBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
 
-      // Apply text search client-side
       var searchEl = document.getElementById('msgSearch');
       var term = searchEl ? searchEl.value.trim().toLowerCase() : '';
       var filtered = term ? msgs.filter(function(m) {
@@ -698,41 +957,58 @@
         return hay.indexOf(term) !== -1;
       }) : msgs;
 
-      // Update count badge
       var countEl = document.getElementById('msgFilterCount');
       if (countEl) {
-        if (term) {
-          countEl.textContent = filtered.length + ' of ' + msgs.length;
-        } else {
-          countEl.textContent = msgs.length + ' message' + (msgs.length !== 1 ? 's' : '');
-        }
+        countEl.textContent = term
+          ? filtered.length + '/' + msgs.length
+          : msgs.length + (msgs.length === 1 ? ' msg' : ' msgs');
       }
 
-      // msgs are newest-first from the API; reverse to show oldest first
       var ordered = filtered.slice().reverse();
 
       if (ordered.length === 0) {
-        list.innerHTML = '<div class="msg-empty">No messages yet</div>';
+        list.innerHTML = '<div class="msg-empty">No messages</div>';
         return;
       }
 
       list.innerHTML = '';
+      var lastDateStr = null;
+      var lastSenderKey = null;
+      var lastDirection = null;
+      var lastTs = 0;
+
       ordered.forEach(function(m) {
         var isOut = m.direction === 'out';
+
+        // Date separator
+        var dateStr = fmtDate(m.ts);
+        if (dateStr !== lastDateStr) {
+          var sep = document.createElement('div');
+          sep.className = 'msg-date-sep';
+          sep.textContent = dateStr;
+          list.appendChild(sep);
+          lastDateStr = dateStr;
+          lastSenderKey = null;
+        }
+
+        var senderKey = isOut ? '__out__' : (m.sender_pubkey || m.sender_name || '');
+        var sameGroup = !isOut && senderKey && senderKey === lastSenderKey
+                        && lastDirection === 'in' && (m.ts - lastTs) < 120;
+        lastSenderKey = senderKey;
+        lastDirection = isOut ? 'out' : 'in';
+        lastTs = m.ts;
+
         var item = document.createElement('div');
-        item.className = 'msg-item ' + (isOut ? 'outgoing' : 'incoming');
+        item.className = 'msg-item ' + (isOut ? 'outgoing' : 'incoming') + (sameGroup ? ' grouped' : '');
 
         if (!isOut) {
-          var senderName = m.sender_name || (m.sender_pubkey ? m.sender_pubkey.substring(0, _nodeIdChars) : 'Unknown');
-          // Channel messages have no sender_pubkey — the real sender's name is
-          // embedded in the text as "Name: message text". Extract it.
+          var senderName = m.sender_name || (m.sender_pubkey ? m.sender_pubkey.substring(0, _nodeIdChars).toUpperCase() : 'Unknown');
           var displayName = senderName;
           if (!m.sender_pubkey) {
             var nameMatch = m.text.match(/^([^:\n]{1,60}):\s+/);
             if (nameMatch) displayName = nameMatch[1].trim();
           }
-          // Prefer hops/path stored at message receipt time (exact for that message).
-          // Fall back to live contact routing table if not stored yet.
+
           var hops = (m.hops !== undefined && m.hops >= 0) ? m.hops : null;
           var routePath = m.path || '';
           if (m.sender_pubkey && (hops === null || !routePath)) {
@@ -742,7 +1018,6 @@
               if (!routePath) routePath = contact.route_path || '';
             }
           }
-          // Final fallback: contact route cache from PATH_RESPONSE events
           if (!routePath && m.sender_pubkey) {
             var pk = m.sender_pubkey.toUpperCase();
             var cr = _cachedRoutes[pk] || _cachedRoutes[pk.substring(0, 2)];
@@ -752,107 +1027,111 @@
             }
           }
 
-          // Sender row
-          var senderRow = document.createElement('div');
-          senderRow.className = 'msg-sender';
+          // Meta row (name + hops + path button)
+          var metaRow = document.createElement('div');
+          metaRow.className = 'msg-meta';
 
           var nameSpan = document.createElement('span');
           nameSpan.className = 'msg-sender-name';
           nameSpan.textContent = displayName;
+          metaRow.appendChild(nameSpan);
 
-          // Route info row (hidden by default, toggled by clicking name)
-          var routeInfo = document.createElement('div');
-          routeInfo.className = 'msg-route-info';
-          routeInfo.style.display = 'none';
-
-          if (hops !== null) {
-            nameSpan.classList.add('has-route');
-            buildRouteInfo(routeInfo, displayName, hops, routePath);
-            nameSpan.addEventListener('click', function() {
-              routeInfo.style.display = routeInfo.style.display === 'none' ? '' : 'none';
-            });
-          }
-          senderRow.appendChild(nameSpan);
-
-          // Hops badge
           if (hops !== null) {
             var hopsSpan = document.createElement('span');
-            hopsSpan.className = 'msg-hops';
-            hopsSpan.textContent = hops === 0 ? 'Direct' : hops + ' hop' + (hops !== 1 ? 's' : '');
-            senderRow.appendChild(hopsSpan);
+            hopsSpan.className = 'msg-hops' + (hops === 0 ? ' direct' : '');
+            hopsSpan.textContent = hops === 0 ? 'Direct' : hops + (hops === 1 ? ' hop' : ' hops');
+            metaRow.appendChild(hopsSpan);
+
+            if (hops > 0 && routePath) {
+              var routeBtn = document.createElement('button');
+              routeBtn.className = 'msg-route-btn';
+              routeBtn.textContent = 'path ›';
+              metaRow.appendChild(routeBtn);
+            }
           }
 
-          // Reply button
-          var replyBtn = document.createElement('button');
-          replyBtn.className = 'msg-reply-btn';
-          replyBtn.title = 'Reply to ' + displayName;
-          replyBtn.innerHTML = '&#8617;';
-          (function(pk, nm, chIdx) {
-            replyBtn.addEventListener('click', function() { setReply(pk, nm, chIdx); });
-          })(m.sender_pubkey, displayName, m.channel_idx);
-          senderRow.appendChild(replyBtn);
+          item.appendChild(metaRow);
 
-          item.appendChild(senderRow);
+          // Route info panel
+          var routeInfo = document.createElement('div');
+          routeInfo.className = 'msg-route-info';
+          if (hops !== null) buildRouteInfo(routeInfo, displayName, hops, routePath);
+          if (hops !== null && hops > 0 && routePath) {
+            var pathBtn = metaRow.querySelector('.msg-route-btn');
+            if (pathBtn) {
+              pathBtn.addEventListener('click', function() {
+                var open = routeInfo.classList.contains('expanded');
+                routeInfo.classList.toggle('expanded', !open);
+                pathBtn.textContent = open ? 'path ›' : 'path ∨';
+              });
+            }
+          }
           item.appendChild(routeInfo);
-        } else {
-          var senderRow = document.createElement('div');
-          senderRow.className = 'msg-sender';
-          senderRow.textContent = 'You';
-          item.appendChild(senderRow);
         }
 
+        // Bubble
         var bubble = document.createElement('div');
         bubble.className = 'msg-bubble';
         bubble.textContent = m.text;
         item.appendChild(bubble);
 
-        var timeEl = document.createElement('div');
+        // Footer: time + ack/reply
+        var footer = document.createElement('div');
+        footer.className = 'msg-footer';
+
+        var timeEl = document.createElement('span');
         timeEl.className = 'msg-time';
         timeEl.textContent = fmtTime(m.ts);
-        item.appendChild(timeEl);
+        footer.appendChild(timeEl);
 
-        // Seen-by count for outgoing messages
         if (isOut) {
-          var acksEl = document.createElement('div');
+          var acksEl = document.createElement('span');
           acksEl.dataset.msgAcks = m.acks;
           if (m.acks > 0) {
             acksEl.className = 'msg-acks';
-            acksEl.innerHTML = '\u2713 Seen by ' + m.acks + (m.acks === 1 ? ' node' : ' nodes');
+            acksEl.innerHTML = '✓ ' + m.acks + (m.acks === 1 ? ' seen' : ' seen');
           } else if (m.ack_code) {
-            // Has ack_code = radio accepted it, waiting for confirmation from the other end
             acksEl.className = 'msg-acks msg-acks-waiting';
-            acksEl.innerHTML = '<span class="ack-pulse"></span> Waiting for acknowledgement';
+            acksEl.innerHTML = '<span class="ack-pulse"></span> Sending';
           } else {
             acksEl.className = 'msg-acks msg-acks-zero';
-            acksEl.textContent = '\u2713 Sent';
+            acksEl.textContent = '✓ Sent';
           }
-          item.appendChild(acksEl);
+          footer.appendChild(acksEl);
+        } else {
+          // Reply button in footer
+          var replyBtn = document.createElement('button');
+          replyBtn.className = 'msg-reply-btn';
+          replyBtn.innerHTML = '&#8617; Reply';
+          var senderNameCopy = !isOut ? (m.sender_name || (m.sender_pubkey ? m.sender_pubkey.substring(0, _nodeIdChars).toUpperCase() : 'Unknown')) : '';
+          if (!m.sender_pubkey) {
+            var nm2 = m.text.match(/^([^:\n]{1,60}):\s+/);
+            if (nm2) senderNameCopy = nm2[1].trim();
+          }
+          (function(pk, nm, chIdx) {
+            replyBtn.addEventListener('click', function() { setReply(pk, nm, chIdx); });
+          })(m.sender_pubkey, senderNameCopy, m.channel_idx);
+          footer.appendChild(replyBtn);
         }
 
+        item.appendChild(footer);
         list.appendChild(item);
       });
 
-      if (wasAtBottom) {
-        list.scrollTop = list.scrollHeight;
-      }
+      if (wasAtBottom) list.scrollTop = list.scrollHeight;
     }
-
-    // --- Send ---
 
     function sendMessage() {
       if (!_replyContact && !_activeChannel) return;
       var input = document.getElementById('msgInput');
       var text = input.value.trim();
       if (!text) return;
-
       var btn = document.getElementById('sendBtn');
       btn.disabled = true;
       setStatus('');
-
       var body = _replyContact
         ? { pubkey: _replyContact.pubkey, text: text }
         : { channel_idx: _activeChannel.idx, text: text };
-
       fetch('/api/messages/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -864,26 +1143,18 @@
             input.value = '';
             input.style.height = '';
             setStatus('');
-            if (_replyContact) {
-              _replyContact = null;
-              buildTabs();
-              updatePlaceholder();
-            }
+            if (_replyContact) { _replyContact = null; updatePlaceholder(); }
             loadMessages();
           } else {
-            var errMsg = result.error || 'unknown error';
-            setStatus('\u2717 Failed: ' + errMsg, 'err');
-            // Re-enable so the user can retry
+            setStatus('✗ ' + (result.error || 'Send failed'), 'err');
           }
           btn.disabled = (_replyContact === null && _activeChannel === null);
         })
         .catch(function(e) {
-          setStatus('\u2717 Not sent \u2014 ' + e.message, 'err');
+          setStatus('✗ Not sent — ' + e.message, 'err');
           btn.disabled = (_replyContact === null && _activeChannel === null);
         });
     }
-
-    // --- Auto-resize textarea + keyboard shortcuts ---
 
     document.addEventListener('DOMContentLoaded', function() {
       fetch('/api/settings').then(function(r) { return r.json(); }).then(function(s) {
@@ -891,58 +1162,48 @@
       }).catch(function() {});
 
       var input = document.getElementById('msgInput');
-
       input.addEventListener('input', function() {
         this.style.height = '';
         this.style.height = Math.min(this.scrollHeight, 128) + 'px';
       });
-
       input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage();
-        }
-        // Escape cancels reply mode
-        if (e.key === 'Escape' && _replyContact) {
-          cancelReply();
-        }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+        if (e.key === 'Escape' && _replyContact) cancelReply();
       });
 
-      // Load contact routes for hop count / route display
       loadContactRoutes();
-
-      // Load channels from device (falls back to settings channels if not connected)
       fetch('/api/channels')
         .then(function(r) { return r.json(); })
         .then(function(chs) {
           _channels = Array.isArray(chs) && chs.length > 0 ? chs : [{ name: 'Primary', idx: 0 }];
-
-          if (_channels.length > 0) {
-            _activeChannel = _channels[0];
-          }
-
-          buildTabs();
-          loadMessages();
-          updatePlaceholder();
-
-          // Auto-refresh every 5s (also refreshes route data periodically)
+          loadChannelData();
           _refreshTimer = setInterval(function() {
-            loadMessages();
+            if (_activeChannel !== null) {
+              loadMessages();
+            } else {
+              loadChannelData();
+            }
             loadContactRoutes();
-          }, 5000);
+          }, 8000);
         })
         .catch(function() {
           _channels = [{ name: 'Primary', idx: 0 }];
-          _activeChannel = _channels[0];
-          buildTabs();
-          loadMessages();
-          updatePlaceholder();
+          loadChannelData();
           _refreshTimer = setInterval(function() {
-            loadMessages();
+            if (_activeChannel !== null) {
+              loadMessages();
+            } else {
+              loadChannelData();
+            }
             loadContactRoutes();
-          }, 5000);
+          }, 8000);
         });
     });
+  </script>
+  <script src="/static/nav.js?v={{ v }}"></script>
+  <script>
+  (function(){function _mc(){fetch('/api/connection').then(function(r){return r.json();}).then(function(d){var dot=document.getElementById('miniConnDot'),txt=document.getElementById('miniConnText');if(!dot)return;dot.className='status-dot '+(d.connected?'online':'offline');txt.textContent=d.connected?'Connected':'Disconnected';}).catch(function(){var dot=document.getElementById('miniConnDot');if(dot)dot.className='status-dot offline';});}
+  _mc();setInterval(_mc,10000);})();
   </script>
 </body>
 </html>

@@ -38,31 +38,52 @@ class MeshcorePoller:
         self._msg_poll_task = None
         self._companion_battery_mv: int = 0  # battery of the companion WiFi node itself
         self._last_connected_ts: float = 0   # unix timestamp of last confirmed connection
+        self._connected_since_ts: float = 0  # unix timestamp when connection was first established
         self._path_sub = None                # passive PATH_RESPONSE subscription
         self._rx_log_sub = None              # all LoRa packets heard — SNR/RSSI/type
         self._advert_sub = None              # node advertisement beacons
         self._telemetry_sub = None           # companion base telemetry (battery)
-        self._polling_enabled = True         # duty-cycle auto-poll on/off
         self._recent_events: deque = deque(maxlen=200)  # live mesh activity feed
         self._node_id_name_cache: dict = self.store.load_node_names()  # pubkey first-byte (2 hex chars) → node name
         self._contact_routes: dict = {}      # pubkey_prefix (upper) → (hops, route_path) for all contacts
+        self._suppress_sdk_paths: bool = False  # True after path reset — ignore SDK out_path until new paths arrive
         self._pending_rx_paths: list = []    # [(ts, hops, path)] — recent RF paths for msg correlation
+        self._alert_state: dict = {}         # pubkey → {"offline": bool, "low_bat": bool} to avoid duplicate alerts
+        self._dont_save_contact_msgs: bool = False  # suppress saving CLI command replies as normal messages
+        self._clock_poll_counts: dict = {}   # pubkey → int, incremented each poll cycle for throttling
+        # Restore polling_enabled from settings so a saved "paused" state survives restarts
+        self._polling_enabled = cfg.get_settings().get("polling_enabled", True)
+
+    @property
+    def ROUTE_TTL_SECONDS(self) -> int:
+        return cfg.get_route_ttl_hours() * 3600
 
     def _lookup_contact_route(self, pubkey_prefix: str) -> tuple:
-        """Fuzzy-match pubkey_prefix against _contact_routes. Returns (hops, path) or (-1, '')."""
+        """Fuzzy-match pubkey_prefix against _contact_routes. Returns (hops, path) or (-1, '').
+        Entries older than ROUTE_TTL_SECONDS are treated as expired."""
         if not pubkey_prefix:
             return (-1, "")
+        now = time.time()
         pre = pubkey_prefix.upper()
+
+        def _valid(v):
+            """Return (hops, path) if entry is fresh, else None."""
+            ts = v[2] if len(v) > 2 else 0
+            return (v[0], v[1]) if (now - ts) < self.ROUTE_TTL_SECONDS else None
+
         # Exact match first
         if pre in self._contact_routes:
-            return self._contact_routes[pre]
+            r = _valid(self._contact_routes[pre])
+            if r: return r
         # Try 2-char prefix
         if len(pre) >= 2 and pre[:2] in self._contact_routes:
-            return self._contact_routes[pre[:2]]
+            r = _valid(self._contact_routes[pre[:2]])
+            if r: return r
         # Fuzzy: any stored key that starts with our prefix OR our prefix starts with stored key
         for k, v in self._contact_routes.items():
             if k.startswith(pre) or pre.startswith(k):
-                return v
+                r = _valid(v)
+                if r: return r
         return (-1, "")
 
     def _cache_node_name(self, node_id: str, name: str):
@@ -72,6 +93,33 @@ class MeshcorePoller:
             return  # no change, skip write
         self._node_id_name_cache[node_id] = name
         self.store.save_node_names({node_id: name})
+
+    def _resolve_hop_name(self, hop_id: str) -> str:
+        """Resolve a hop ID (2 or 4 hex chars) to a known node name.
+
+        Resolution order:
+          1. Exact hit in node-name cache (handles both 1-byte and 2-byte IDs)
+          2. Configured repeaters — compare hop_id against first N chars of their pubkey
+          3. Live contacts via _resolve_contact_name
+        Returns empty string when name is unknown.
+        """
+        hop_upper = hop_id.upper()
+        # 1. Cache hit
+        name = self._node_id_name_cache.get(hop_upper, "")
+        if name:
+            return name
+        # 2. Configured repeaters — we know their full pubkeys
+        for r_cfg in cfg.get_repeaters():
+            pk = r_cfg.get("pubkey", "").upper()
+            if pk and pk.startswith(hop_upper):
+                rname = r_cfg.get("name", "")
+                if rname:
+                    # Cache for next time
+                    self._node_id_name_cache[hop_upper] = rname
+                    return rname
+        # 3. Live contacts
+        resolved = self._resolve_contact_name(hop_id)
+        return resolved if resolved != hop_id[:8] else ""
 
     @property
     def is_connected(self) -> bool:
@@ -88,6 +136,11 @@ class MeshcorePoller:
         # Register any initially configured repeaters
         for r in cfg.get_repeaters():
             self.store.init_repeater(r["pubkey"], r["name"])
+
+        # Respect auto_connect setting — if disabled, start in disconnected state
+        if not cfg.get_settings().get("auto_connect", True):
+            self._stay_disconnected = True
+            logger.info("Auto-connect disabled — staying disconnected until manually connected")
 
         while self._running:
             if self._stay_disconnected:
@@ -138,6 +191,12 @@ class MeshcorePoller:
         self._polling_enabled = not self._polling_enabled
         state = "enabled" if self._polling_enabled else "disabled"
         logger.info(f"Duty-cycle polling {state}")
+        try:
+            settings = cfg.get_settings()
+            settings["polling_enabled"] = self._polling_enabled
+            cfg.save_settings(settings)
+        except Exception:
+            pass
         return self._polling_enabled
 
     async def _connect_and_poll(self):
@@ -155,12 +214,18 @@ class MeshcorePoller:
             max_reconnect_attempts=5,
         )
         logger.info("Connected to companion device")
+        self._connected_since_ts = time.time()
         if self.mc and hasattr(self.mc, "self_info") and self.mc.self_info:
             logger.info(f"Self info: {self.mc.self_info}")
         else:
             logger.info("Self info not available after connect")
 
-        await self._refresh_contacts()
+        if cfg.get_pull_contacts_on_start():
+            await self._refresh_contacts(configured_only=False)
+        else:
+            # Pull only configured repeaters so polling works; leave advert_nodes intact.
+            # Contacts only clear when the user explicitly triggers a reset.
+            await self._refresh_contacts(configured_only=True)
         await self._fetch_device_channels()
         await self._fetch_companion_telemetry()
         await self._subscribe_messages()
@@ -210,50 +275,22 @@ class MeshcorePoller:
     # --- Companion device telemetry (battery) ---
 
     async def _fetch_companion_telemetry(self):
-        """Request battery level from the companion WiFi node."""
+        """Request battery level directly from the companion WiFi node."""
         if not self.mc:
             return
-        # Update last-connected timestamp whenever we successfully poll
         self._last_connected_ts = time.time()
-
-        si = getattr(self.mc, "self_info", None) or {}
-        companion_pk = (si.get("public_key") or si.get("pub_key") or
-                        si.get("pubkey") or "")
-
         try:
-            # Try req_status_sync on the companion if it appears as a contact
-            if companion_pk:
-                contact = self._find_contact(companion_pk)
-                logger.info(f"[companion] contact lookup for {companion_pk[:8]}: {'found' if contact else 'not found'} | contacts: {len(self._contacts)}")
-                if contact is not None:
-                    status = await self.mc.commands.req_status_sync(contact, timeout=10)
-                    logger.info(f"[companion] req_status_sync returned: {status!r}")
-                    if isinstance(status, dict) and status.get("bat"):
-                        self._companion_battery_mv = int(status["bat"])
-                        logger.info(f"[companion] battery from status: {self._companion_battery_mv}mV")
-                        return
+            event = await self.mc.commands.get_bat()
+            if event and event.type == EventType.BATTERY:
+                mv = event.payload.get("level", 0)
+                if mv and mv > 0:
+                    self._companion_battery_mv = int(mv)
+                    logger.info(f"[companion] battery: {self._companion_battery_mv}mV")
+                    self.store.log_companion_battery(self._companion_battery_mv)
+                    return
+            logger.debug(f"[companion] get_bat returned: {event!r}")
         except Exception as e:
-            logger.info(f"[companion] req_status_sync failed: {e}")
-        try:
-            # Try req_telemetry_sync on the companion contact
-            if companion_pk:
-                contact = self._find_contact(companion_pk)
-                if contact is not None:
-                    telemetry = await self.mc.commands.req_telemetry_sync(contact, timeout=10)
-                    logger.info(f"[companion] req_telemetry_sync returned: {telemetry!r}")
-                    sensors = telemetry if isinstance(telemetry, list) else []
-                    for sensor in sensors:
-                        sensor_type = sensor.get("type", "")
-                        value = sensor.get("value")
-                        ch = sensor.get("channel", -1)
-                        if sensor_type == "voltage" and value is not None:
-                            self._companion_battery_mv = int(float(value) * 1000)
-                            return
-                        elif sensor_type == "analog" and ch == 1 and value is not None:
-                            self._companion_battery_mv = int(float(value) * 1000)
-                            return
-        except Exception as e:
-            logger.info(f"[companion] req_telemetry_sync failed: {e}")
+            logger.info(f"[companion] get_bat failed: {e}")
 
     # --- Device channel discovery ---
 
@@ -443,10 +480,21 @@ class MeshcorePoller:
                 if not path:
                     import time as _time
                     now = _time.time()
-                    for rx_ts, rx_hops, rx_path in reversed(self._pending_rx_paths):
-                        if now - rx_ts < 10.0 and abs(rx_hops - hops) <= 1 and rx_path:
+                    spk = (sender_pubkey or "").lower()
+                    # First pass: prefer a path whose first hop matches sender prefix
+                    for entry in reversed(self._pending_rx_paths):
+                        rx_ts, rx_hops, rx_path = entry[0], entry[1], entry[2]
+                        first_hop = entry[3] if len(entry) > 3 else ""
+                        if now - rx_ts < 5.0 and rx_path and spk and first_hop.startswith(spk[:2]):
                             path = rx_path
                             break
+                    # Second pass: any recent path within 3s
+                    if not path:
+                        for entry in reversed(self._pending_rx_paths):
+                            rx_ts, rx_hops, rx_path = entry[0], entry[1], entry[2]
+                            if now - rx_ts < 3.0 and rx_path:
+                                path = rx_path
+                                break
                 # Still no path — fire-and-forget path discovery so future messages work
                 if not path:
                     contact_obj = self._find_contact(sender_pubkey)
@@ -455,15 +503,16 @@ class MeshcorePoller:
                             self._discover_path_for_contact(contact_obj, sender_pubkey, sender_name)
                         )
             if text:
-                is_new = self.store.store_message("in", None, sender_pubkey, sender_name, text,
-                                                  hops=hops, path=path)
-                if is_new:
-                    logger.info(f"[msg] Direct from {sender_name} ({hops} hops): {text[:60]}")
+                if not self._dont_save_contact_msgs:
+                    is_new = self.store.store_message("in", None, sender_pubkey, sender_name, text,
+                                                      hops=hops, path=path)
                     self._log_event("contact_msg", sender=sender_name, pubkey=sender_pubkey,
                                     hops=hops, path=path,
                                     path_chips=self._decode_path_chips(path),
                                     text=text[:120])
-                    await self._send_ntfy("MeshCore", f"{sender_name}: {text}")
+                    if is_new:
+                        logger.info(f"[msg] Direct from {sender_name} ({hops} hops): {text[:60]}")
+                        await self._send_ntfy("MeshCore", f"{sender_name}: {text}")
         except Exception as e:
             logger.error(f"Error handling contact message: {e}")
 
@@ -491,10 +540,19 @@ class MeshcorePoller:
                 if not path:
                     import time as _time
                     now = _time.time()
-                    for rx_ts, rx_hops, rx_path in reversed(self._pending_rx_paths):
-                        if now - rx_ts < 10.0 and abs(rx_hops - hops) <= 1 and rx_path:
+                    spk2 = (sender_pubkey or "").lower()
+                    for entry in reversed(self._pending_rx_paths):
+                        rx_ts, rx_hops, rx_path = entry[0], entry[1], entry[2]
+                        first_hop = entry[3] if len(entry) > 3 else ""
+                        if now - rx_ts < 5.0 and rx_path and spk2 and first_hop.startswith(spk2[:2]):
                             path = rx_path
                             break
+                    if not path:
+                        for entry in reversed(self._pending_rx_paths):
+                            rx_ts, rx_hops, rx_path = entry[0], entry[1], entry[2]
+                            if now - rx_ts < 3.0 and rx_path:
+                                path = rx_path
+                                break
                 # Still no path — fire-and-forget path discovery so future messages work
                 if not path and sender_pubkey:
                     contact_obj = self._find_contact(sender_pubkey)
@@ -514,7 +572,9 @@ class MeshcorePoller:
                                     hops=hops, path=path,
                                     path_chips=self._decode_path_chips(path),
                                     text=text[:120])
-                    await self._send_ntfy("MeshCore", f"[{ch_name}] {text}")
+                    muted = cfg.get_settings().get("muted_channels", [])
+                    if channel_idx not in muted:
+                        await self._send_ntfy("MeshCore", f"[{ch_name}] {text}")
         except Exception as e:
             logger.error(f"Error handling channel message: {e}")
 
@@ -603,7 +663,7 @@ class MeshcorePoller:
                 disc_route = " > ".join(segs)
 
             # Cache for all contacts (used by non-configured contacts too)
-            self._contact_routes[pubkey_pre.upper()] = (new_hops, disc_route)
+            self._contact_routes[pubkey_pre.upper()] = (new_hops, disc_route, time.time())
 
             # Update configured repeater store if this matches one
             matched_pubkey = None
@@ -662,20 +722,29 @@ class MeshcorePoller:
                         payload_type, f"Type {payload_type}"
                     )
 
-                    # Byte 1 = path length (N), bytes 2 to 2+N-1 = hop IDs (1 byte each)
-                    path_len = int(raw_str[2:4], 16) if len(raw_str) >= 4 else 0
-                    payload_hex_start = (2 + path_len) * 2
+                    # Direct packets (route_type=0) have no path — payload starts at byte 1.
+                    # Flood/Routed/Reply: byte 1 encodes both hop size and hop count:
+                    #   bits 6-7 = hash_size (00=1 byte/hop, 01=2 bytes/hop)
+                    #   bits 0-5 = hop count
+                    if route_type == 0:
+                        path_len = 0
+                        hop_hex_size = 2
+                        payload_hex_start = 2
+                    else:
+                        path_len_byte = int(raw_str[2:4], 16) if len(raw_str) >= 4 else 0
+                        hash_size_bits = (path_len_byte >> 6) & 0x03
+                        path_len = path_len_byte & 0x3F
+                        hop_hex_size = (hash_size_bits + 1) * 2  # 0→2, 1→4, 2→6 hex chars
+                        payload_hex_start = 4 + path_len * hop_hex_size
 
                     # Decode each hop in the path
                     for i in range(path_len):
-                        hop_hex_pos = 4 + i * 2
-                        if hop_hex_pos + 2 > len(raw_str):
+                        hop_hex_pos = 4 + i * hop_hex_size
+                        if hop_hex_pos + hop_hex_size > len(raw_str):
                             break
-                        hop_id = raw_str[hop_hex_pos:hop_hex_pos + 2].upper()
-                        hop_name = self._node_id_name_cache.get(hop_id, "")
-                        if not hop_name:
-                            resolved = self._resolve_contact_name(hop_id)
-                            hop_name = resolved if resolved != hop_id else ""
+                        # Show exactly what the packet says — no expansion
+                        hop_id = raw_str[hop_hex_pos:hop_hex_pos + hop_hex_size].upper()
+                        hop_name = self._resolve_hop_name(hop_id)
                         decoded_path.append({"id": hop_id, "name": hop_name or hop_id})
 
                     # Stash path for message-type packets so _on_contact/channel_msg can use it
@@ -683,8 +752,35 @@ class MeshcorePoller:
                     if payload_type in _MSG_PAYLOAD_TYPES and decoded_path:
                         import time as _time
                         path_str = " > ".join(h["id"] for h in decoded_path)
-                        self._pending_rx_paths.append((_time.time(), path_len, path_str))
+                        # Store first hop ID (likely the sender or nearest relay) for matching
+                        first_hop = decoded_path[0]["id"].lower() if decoded_path else ""
+                        self._pending_rx_paths.append((_time.time(), path_len, path_str, first_hop))
                         self._pending_rx_paths = self._pending_rx_paths[-20:]
+
+                    # Path Update (type 8): payload starts with announcing node's pubkey (64 hex chars)
+                    if payload_type == 8 and len(raw_str) >= payload_hex_start + 64 and decoded_path:
+                        try:
+                            pl8 = raw_str[payload_hex_start:]
+                            src_pubkey = pl8[0:64]  # 32-byte pubkey
+                            if src_pubkey and len(src_pubkey) == 64:
+                                src_pfx = {src_pubkey[:n].upper() for n in (2, 4, 6) if len(src_pubkey) >= n}
+                                filtered8 = [h for h in decoded_path if h["id"].upper() not in src_pfx]
+                                route8 = " > ".join(h["id"] for h in filtered8)
+                                hops8 = len(filtered8)
+                                ck8 = src_pubkey[:4].upper() if len(src_pubkey) >= 4 else src_pubkey[:2].upper()
+                                _now8 = time.time()
+                                self._contact_routes[ck8] = (hops8, route8, _now8)
+                                if len(src_pubkey) >= 4:
+                                    self._contact_routes[src_pubkey[:2].upper()] = (hops8, route8, _now8)
+                                self._suppress_sdk_paths = False
+                                logger.debug(f"[path update] {src_pubkey[:8]}: hops={hops8}, path={route8 or 'direct'}")
+                                for r_cfg in cfg.get_repeaters():
+                                    rpk = r_cfg.get("pubkey", "").upper()
+                                    if rpk and (rpk.startswith(src_pubkey[:8].upper()) or src_pubkey[:8].upper().startswith(rpk[:8])):
+                                        self.store.update_route(rpk, hops8, route8)
+                                        break
+                        except Exception:
+                            pass
 
                     advert_data = None
                     if payload_type == 4 and len(raw_str) >= payload_hex_start + 218:
@@ -699,13 +795,13 @@ class MeshcorePoller:
                         app_flags = None
                         if len(pl) >= 202:
                             app_flags = int(pl[200:202], 16)
-                        # lat/lon: bytes 101-104, 105-108, signed int32 little-endian / 1e7
+                        # lat/lon: bytes 101-104, 105-108, signed int32 little-endian / 1e6
                         advert_lat = advert_lon = None
                         if len(pl) >= 218:
                             lat_int = int.from_bytes(bytes.fromhex(pl[202:210]), 'little', signed=True)
                             lon_int = int.from_bytes(bytes.fromhex(pl[210:218]), 'little', signed=True)
-                            advert_lat = round(lat_int / 1e7, 6)
-                            advert_lon = round(lon_int / 1e7, 6)
+                            advert_lat = round(lat_int / 1e6, 6)
+                            advert_lon = round(lon_int / 1e6, 6)
                         # name: bytes 109+ (218 hex chars into payload)
                         name_hex = pl[218:] if len(pl) > 218 else ""
                         if len(name_hex) % 2:
@@ -720,14 +816,18 @@ class MeshcorePoller:
                         if len(name_str) >= 2:
                             node_label = name_str
                             if pubkey_hex:
-                                self._cache_node_name(pubkey_hex[0:2], name_str)
-                                # Persist advert-discovered node to DB for map display
-                                self.store.upsert_advert_node(
-                                    pubkey=pubkey_hex,
-                                    name=name_str,
-                                    lat=advert_lat if advert_lat and advert_lat != 0.0 else None,
-                                    lon=advert_lon if advert_lon and advert_lon != 0.0 else None,
-                                )
+                                self._cache_node_name(pubkey_hex[0:2], name_str)  # 1-byte hop key
+                                if len(pubkey_hex) >= 4:
+                                    self._cache_node_name(pubkey_hex[0:4], name_str)  # 2-byte hop key
+                                if len(pubkey_hex) >= 6:
+                                    self._cache_node_name(pubkey_hex[0:6], name_str)  # 3-byte hop key
+                        if pubkey_hex:
+                            self.store.upsert_advert_node(
+                                pubkey=pubkey_hex,
+                                name=name_str or pubkey_hex[:8],
+                                lat=advert_lat if advert_lat and advert_lat != 0.0 else None,
+                                lon=advert_lon if advert_lon and advert_lon != 0.0 else None,
+                            )
                         advert_data = {
                             "pubkey": pubkey_hex,
                             "ts": advert_ts,
@@ -739,10 +839,27 @@ class MeshcorePoller:
 
                         # Use the decoded RF path as a route update for this node
                         if pubkey_hex and path_len >= 0:
-                            route_str = " > ".join(h["id"] for h in decoded_path)
+                            # Strip any hop whose ID matches the source node's own pubkey prefix
+                            # (some firmware includes the source's own ID as the first hop)
+                            src_prefixes = {pubkey_hex[:n].upper() for n in (2, 4, 6) if len(pubkey_hex) >= n}
+                            filtered_path = [h for h in decoded_path if h["id"].upper() not in src_prefixes]
+                            route_str = " > ".join(h["id"] for h in filtered_path)
+                            filtered_hops = len(filtered_path)
                             cache_key = pubkey_hex[:4].upper() if len(pubkey_hex) >= 4 else pubkey_hex[:2].upper()
-                            self._contact_routes[cache_key] = (path_len, route_str)
-                            logger.debug(f"[advert path] {name_str or pubkey_hex[:8]}: hops={path_len}, path={route_str or 'direct'}")
+                            _now = time.time()
+                            self._contact_routes[cache_key] = (filtered_hops, route_str, _now)
+                            # Also index by 2-char prefix so get_mesh_contacts() fallback lookup finds it
+                            if len(pubkey_hex) >= 4:
+                                self._contact_routes[pubkey_hex[:2].upper()] = (filtered_hops, route_str, _now)
+                            # New real path arrived — lift the post-reset suppression
+                            self._suppress_sdk_paths = False
+                            logger.debug(f"[advert path] {name_str or pubkey_hex[:8]}: hops={filtered_hops}, path={route_str or 'direct'}")
+                            # Push route into store so SSE stream updates dashboard immediately
+                            for r_cfg in cfg.get_repeaters():
+                                rpk = r_cfg.get("pubkey", "").upper()
+                                if rpk and (rpk.startswith(pubkey_hex[:8].upper()) or pubkey_hex[:8].upper().startswith(rpk[:8])):
+                                    self.store.update_route(rpk, filtered_hops, route_str)
+                                    break
 
                     # For non-advert or if name not found: use first hop as node label
                     if not node_label and decoded_path:
@@ -770,6 +887,10 @@ class MeshcorePoller:
             # Cache pubkey first byte → name so _on_rx_log can resolve node IDs
             if pubkey and len(pubkey) >= 2 and name and name != pubkey[:8]:
                 self._cache_node_name(pubkey[:2], name)
+                if len(pubkey) >= 4:
+                    self._cache_node_name(pubkey[:4], name)
+                if len(pubkey) >= 6:
+                    self._cache_node_name(pubkey[:6], name)
         except Exception as e:
             logger.debug(f"Error handling ADVERTISEMENT: {e}")
 
@@ -823,6 +944,13 @@ class MeshcorePoller:
             hops = int(hops)
         except (TypeError, ValueError):
             hops = -1
+        # 255 (0xFF) is MeshCore's sentinel for "unknown hop count"
+        if hops == 255:
+            hops = -1
+        # Values >= 64 are encoded path_len_bytes: bits 7-6 = hash size, bits 5-0 = hop count
+        # e.g. 0x42 = 2-byte hash mode, 2 hops — decode to real hop count
+        elif hops >= 64:
+            hops = hops & 0x3F
 
         raw_path = payload.get("path", payload.get("route", payload.get("out_path", "")))
         path_str = ""
@@ -898,7 +1026,7 @@ class MeshcorePoller:
         if not self.mc:
             return {"ok": False, "error": "Not connected to companion device"}
         contact = self._find_contact(pubkey)
-        if contact is None:
+        if contact is None and cfg.get_pull_contacts_on_start():
             await self._refresh_contacts()
             contact = self._find_contact(pubkey)
         if contact is None:
@@ -920,23 +1048,45 @@ class MeshcorePoller:
 
     # --- Contacts ---
 
-    async def _refresh_contacts(self):
-        """Fetch contacts from companion to populate routing table."""
+    async def _refresh_contacts(self, configured_only: bool = False):
+        """Fetch contacts from companion to populate routing table.
+
+        configured_only=True: keep only contacts that match a configured repeater pubkey.
+        Used when pull_contacts_on_start is off so the poll loop can still reach repeaters
+        without bulk-importing all mesh contacts.
+        """
         try:
             result = await self.mc.commands.get_contacts()
             if result.type == EventType.ERROR:
                 logger.error(f"get_contacts failed: {result.payload}")
                 return
 
-            contacts = result.payload
-            if isinstance(contacts, dict):
-                self._contacts = contacts
-            elif isinstance(contacts, list):
-                self._contacts = {}
-                for c in contacts:
+            raw = result.payload
+            if isinstance(raw, dict):
+                all_contacts = raw
+            elif isinstance(raw, list):
+                all_contacts = {}
+                for c in raw:
                     pk = c.get("public_key", "")
                     if pk:
-                        self._contacts[pk] = c
+                        all_contacts[pk] = c
+            else:
+                all_contacts = {}
+
+            if configured_only:
+                cfg_pubkeys = [r["pubkey"].lower() for r in cfg.get_repeaters()]
+                filtered = {}
+                for pk, c in all_contacts.items():
+                    pk_lower = pk.lower() if isinstance(pk, str) else pk.hex().lower()
+                    for cpk in cfg_pubkeys:
+                        if pk_lower.startswith(cpk[:8]) or cpk.startswith(pk_lower[:8]):
+                            filtered[pk] = c
+                            break
+                self._contacts = filtered
+                logger.info(f"Loaded {len(all_contacts)} total contacts; kept {len(self._contacts)} configured")
+            else:
+                self._contacts = all_contacts
+                logger.info(f"Loaded {len(self._contacts)} contacts from companion")
 
             # Pre-populate node ID → name cache from loaded contacts
             for key, contact in self._contacts.items():
@@ -944,10 +1094,21 @@ class MeshcorePoller:
                 name = contact.get("name", "") if isinstance(contact, dict) else ""
                 if pk and name and len(pk) >= 2:
                     self._cache_node_name(pk[:2], name)
-
-            logger.info(f"Loaded {len(self._contacts)} contacts from companion")
         except Exception as e:
             logger.error(f"Contact refresh failed: {e}")
+
+    def _sync_route_to_store(self, pubkey_pre: str, hops: int, route_path: str):
+        """If pubkey_pre matches a configured repeater, write the route back to the store."""
+        if not route_path and hops < 0:
+            return
+        pre = pubkey_pre.lower()
+        for r in cfg.get_repeaters():
+            pk = (r.get("pubkey") or "").lower()
+            if not pk:
+                continue
+            if pk.startswith(pre[:4]) or pre.startswith(pk[:4]):
+                self.store.update_route(pk, hops, route_path)
+                return
 
     def _find_contact(self, pubkey: str):
         """Find a contact matching the configured pubkey (full or prefix)."""
@@ -969,6 +1130,19 @@ class MeshcorePoller:
 
     def get_mesh_contacts(self) -> list:
         """Return all known mesh contacts (configured + unknown) with GPS and routing data."""
+        # Build a lookup of pubkey-prefix → last_seen Unix epoch from RF advert events
+        # These are the only reliable timestamps (device SDK timestamps are relative, not epoch)
+        advert_ts = {}
+        try:
+            for node in self.store.get_advert_nodes():
+                pk = (node.get("pubkey") or "").lower()
+                ts = node.get("last_seen")
+                if pk and ts:
+                    advert_ts[pk] = float(ts)
+                    advert_ts[pk[:2]] = float(ts)  # also index by 2-char prefix
+        except Exception:
+            pass
+
         result = []
         for key, contact in self._contacts.items():
             if not isinstance(contact, dict):
@@ -978,31 +1152,79 @@ class MeshcorePoller:
             lon = contact.get("adv_lon", 0.0) or 0.0
             out_path_len = contact.get("out_path_len", contact.get("hops", contact.get("path_len", -1)))
             hops = out_path_len if (out_path_len is not None and out_path_len >= 0) else -1
-            raw_path = contact.get("out_path", contact.get("path", contact.get("route", "")))
+            # Values >= 64 are encoded path_len_bytes (bits 6-7 = hash size, bits 0-5 = hop count)
+            # e.g. 0x42 = 2-byte mode, 2 hops;  0x02 = 1-byte mode, 2 hops
+            sdk_hash_size = 0  # 0 = 1-byte hops, 1 = 2-byte hops
+            if hops >= 64:
+                sdk_hash_size = (hops >> 6) & 0x03
+                hops = hops & 0x3F
             route_path = ""
-            if isinstance(raw_path, str) and raw_path:
-                chars_per_node = 2
-                if hops > 0:
-                    detected = len(raw_path) // hops
-                    if detected in (2, 4):
-                        chars_per_node = detected
-                segs = [raw_path[i:i+chars_per_node] for i in range(0, len(raw_path), chars_per_node)
-                        if len(raw_path[i:i+chars_per_node]) == chars_per_node]
-                route_path = " > ".join(segs)
-            elif isinstance(raw_path, bytes) and raw_path:
-                bytes_per_node = 1
-                if hops > 0:
-                    detected = len(raw_path) // hops
-                    if detected in (1, 2):
-                        bytes_per_node = detected
-                route_path = " > ".join(raw_path[i:i+bytes_per_node].hex() for i in range(0, len(raw_path), bytes_per_node))
-            # Fall back to contact route cache from PATH_RESPONSE events
-            if not route_path:
-                cached = self._contact_routes.get(pk[:2].upper()) or self._contact_routes.get(pk.upper())
-                if cached:
-                    if hops < 0:
-                        hops = cached[0]
-                    route_path = cached[1]
+            _now = time.time()
+            # If SDK says direct (hops=0) that is definitive — never override with a cached path
+            _sdk_direct = (hops == 0)
+            if not _sdk_direct:
+                # RF-observed cache takes priority over SDK path for multi-hop nodes.
+                # If the cache entry is fresh use it; if expired, route is treated as unknown.
+                # Only fall through to SDK path when we have NO cache entry at all.
+                _cr_key = pk[:4].upper() if len(pk) >= 4 else pk[:2].upper()
+                _cached = (self._contact_routes.get(_cr_key) or
+                           self._contact_routes.get(pk[:2].upper()) or
+                           self._contact_routes.get(pk.upper()))
+                if _cached:
+                    _age = _now - (_cached[2] if len(_cached) > 2 else 0)
+                    if _age < self.ROUTE_TTL_SECONDS:
+                        _cached_segs = len([s for s in _cached[1].split('>') if s.strip()]) if _cached[1] else 0
+                        _sdk_hops = hops  # SDK-reported hop count (may be -1 if unknown)
+                        # Only use cached path if it roughly agrees with SDK hop count
+                        # (reject stale many-hop paths when SDK says 0 or 1 hop)
+                        _path_ok = (_sdk_hops < 0 or abs(_cached_segs - _sdk_hops) <= 1)
+                        if _path_ok:
+                            if hops < 0:
+                                hops = _cached[0]
+                            route_path = _cached[1]
+                    # else: cache expired → leave route_path empty (stale path hidden)
+            else:
+                # No RF-observed entry — fall back to SDK path
+                raw_path = "" if self._suppress_sdk_paths else contact.get("out_path", contact.get("path", contact.get("route", "")))
+                # Use configured node_id_chars as the primary chars-per-hop hint
+                # when the SDK path_len byte doesn't encode hash_size (< 64).
+                # This avoids "0675" being split as ["06","75"] when 2-byte mode is configured.
+                _cfg_chars = cfg.get_settings().get("node_id_chars", 2)
+                _cfg_bytes = max(1, _cfg_chars // 2)
+                if isinstance(raw_path, bytes) and raw_path:
+                    path_bytes = raw_path.rstrip(b'\x00')
+                    if path_bytes:
+                        if sdk_hash_size >= 1:
+                            bytes_per_node = sdk_hash_size + 1
+                        else:
+                            # Prefer configured mode; only auto-detect as fallback
+                            bytes_per_node = _cfg_bytes
+                            if len(path_bytes) % bytes_per_node != 0 and hops > 0:
+                                detected = len(path_bytes) // hops
+                                if detected in (1, 2, 3):
+                                    bytes_per_node = detected
+                        route_path = " > ".join(
+                            path_bytes[i:i+bytes_per_node].hex().upper()
+                            for i in range(0, len(path_bytes), bytes_per_node)
+                            if len(path_bytes[i:i+bytes_per_node]) == bytes_per_node
+                        )
+                elif isinstance(raw_path, str) and raw_path:
+                    path_str = raw_path
+                    while len(path_str) >= 2 and path_str[-2:].upper() == '00':
+                        path_str = path_str[:-2]
+                    if path_str:
+                        if sdk_hash_size >= 1:
+                            chars_per_node = (sdk_hash_size + 1) * 2
+                        else:
+                            # Prefer configured mode; only auto-detect as fallback
+                            chars_per_node = _cfg_chars
+                            if len(path_str) % chars_per_node != 0 and hops > 0:
+                                detected = len(path_str) // hops
+                                if detected in (2, 4, 6):
+                                    chars_per_node = detected
+                        segs = [path_str[i:i+chars_per_node].upper() for i in range(0, len(path_str), chars_per_node)
+                                if len(path_str[i:i+chars_per_node]) == chars_per_node]
+                        route_path = " > ".join(segs)
             # Try several possible name fields the meshcore SDK may use
             name = (
                 contact.get("name") or
@@ -1014,12 +1236,13 @@ class MeshcorePoller:
             name = name.strip() if isinstance(name, str) else ""
             if not name:
                 name = pk[:8]   # fall back to pubkey prefix so it's never blank
-            last_seen = contact.get("last_advert", contact.get("last_seen", contact.get("ts", None)))
-            if last_seen is not None:
-                try:
-                    last_seen = float(last_seen)
-                except (TypeError, ValueError):
-                    last_seen = None
+            # Use advert_nodes table timestamp (proper Unix epoch from our server clock)
+            # The SDK's last_advert is device-relative, not an epoch — don't use it for display
+            last_seen = (
+                advert_ts.get(pk.lower()) or
+                advert_ts.get(pk[:2].lower()) or
+                None
+            )
             result.append({
                 "pubkey": pk,
                 "name": name,
@@ -1031,6 +1254,13 @@ class MeshcorePoller:
             })
         return result
 
+    def remove_contact(self, pubkey: str):
+        """Remove a contact from the in-memory contacts dict by pubkey prefix."""
+        pk_lower = pubkey.lower()
+        to_delete = [k for k in self._contacts if str(k).lower().startswith(pk_lower)]
+        for k in to_delete:
+            del self._contacts[k]
+
     async def _interruptible_sleep(self, seconds: float):
         """Sleep for up to `seconds`, waking immediately if a disconnect/reconnect is requested."""
         remaining = seconds
@@ -1040,7 +1270,10 @@ class MeshcorePoller:
 
     async def _poll_all_repeaters(self, repeaters: list):
         """Poll each configured repeater with staggered delays."""
-        await self._refresh_contacts()
+        if cfg.get_pull_contacts_on_start():
+            await self._refresh_contacts(configured_only=False)
+        else:
+            await self._refresh_contacts(configured_only=True)
         stagger = cfg.get_stagger_delay()
 
         for i, repeater_cfg in enumerate(repeaters):
@@ -1070,27 +1303,37 @@ class MeshcorePoller:
                                 contact.get("hops",
                                 contact.get("path_len", -1)))
                 if out_path_len is not None and out_path_len >= 0:
-                    hops = out_path_len  # 0 = direct, 1 = 1 intermediate, etc.
+                    hops = out_path_len
+                    # Values >= 64 are encoded path_len_bytes (bits 6-7 = hash size, bits 0-5 = hop count)
+                    if hops >= 64:
+                        hops = hops & 0x3F
                     raw_path = contact.get("out_path",
                                 contact.get("path",
                                 contact.get("route", "")))
                     if isinstance(raw_path, str) and raw_path:
-                        # Auto-detect 1-byte (2 hex chars) vs 2-byte (4 hex chars) prefix format
-                        chars_per_node = 2
-                        if hops > 0:
-                            detected = len(raw_path) // hops
-                            if detected in (2, 4):
-                                chars_per_node = detected
-                        segments = [raw_path[i:i+chars_per_node] for i in range(0, len(raw_path), chars_per_node)
-                                    if len(raw_path[i:i+chars_per_node]) == chars_per_node]
-                        route_path = " > ".join(segments)
+                        # Strip trailing '00' zero padding from fixed-size SDK buffer
+                        path_str = raw_path
+                        while len(path_str) >= 2 and path_str[-2:].upper() == '00':
+                            path_str = path_str[:-2]
+                        if path_str:
+                            chars_per_node = 2
+                            if hops > 0:
+                                detected = len(path_str) // hops
+                                if detected in (2, 4):
+                                    chars_per_node = detected
+                            segments = [path_str[i:i+chars_per_node] for i in range(0, len(path_str), chars_per_node)
+                                        if len(path_str[i:i+chars_per_node]) == chars_per_node]
+                            route_path = " > ".join(segments)
                     elif isinstance(raw_path, bytes) and raw_path:
-                        bytes_per_node = 1
-                        if hops > 0:
-                            detected = len(raw_path) // hops
-                            if detected in (1, 2):
-                                bytes_per_node = detected
-                        route_path = " > ".join(raw_path[i:i+bytes_per_node].hex() for i in range(0, len(raw_path), bytes_per_node))
+                        # Strip trailing zero padding from fixed-size SDK buffer
+                        path_bytes = raw_path.rstrip(b'\x00')
+                        if path_bytes:
+                            bytes_per_node = 1
+                            if hops > 0:
+                                detected = len(path_bytes) // hops
+                                if detected in (1, 2):
+                                    bytes_per_node = detected
+                            route_path = " > ".join(path_bytes[i:i+bytes_per_node].hex() for i in range(0, len(path_bytes), bytes_per_node))
                     elif isinstance(raw_path, list) and raw_path:
                         route_path = " > ".join(f"{b:02x}" if isinstance(b, int) else str(b) for b in raw_path)
             elif hasattr(contact, "out_path_len"):
@@ -1121,8 +1364,10 @@ class MeshcorePoller:
             await self._apply_path(contact, pubkey, name, custom_path)
 
             # Login to repeater before requesting data
+            # If admin_pass is absent or empty string, treat as guest (skip login)
             admin_pass = repeater_cfg.get("admin_pass", "password")
-            await self._login_to_repeater(contact, name, admin_pass)
+            if admin_pass:
+                await self._login_to_repeater(contact, name, admin_pass)
             await self._interruptible_sleep(3)
             if not self._running or self._needs_reconnect or self._stay_disconnected:
                 break
@@ -1133,6 +1378,11 @@ class MeshcorePoller:
                 break
 
             await self._request_telemetry(pubkey, name, contact)
+
+            # Check clock every 5 poll cycles (first cycle + every 5th after)
+            self._clock_poll_counts[pubkey] = self._clock_poll_counts.get(pubkey, 0) + 1
+            if self._clock_poll_counts[pubkey] % 5 == 1:
+                await self._request_clock(pubkey, name, contact)
 
             if i < len(repeaters) - 1:
                 logger.debug(f"Waiting {stagger}s before next repeater")
@@ -1158,10 +1408,16 @@ class MeshcorePoller:
                 disc_route = ""
                 if isinstance(raw_path, str) and raw_path:
                     segs = [raw_path[i:i+2] for i in range(0, len(raw_path), 2) if len(raw_path[i:i+2]) == 2]
+                    # Strip hops that match the destination's own pubkey prefix
+                    src_pfx = {pubkey[:n].upper() for n in (2, 4, 6) if len(pubkey) >= n}
+                    segs = [s for s in segs if s.upper() not in src_pfx]
                     disc_route = " > ".join(segs)
                 elif isinstance(raw_path, bytes) and raw_path:
-                    disc_route = " > ".join(raw_path[i:i+1].hex() for i in range(len(raw_path)))
-                self._contact_routes[pubkey.upper()[:4]] = (new_hops, disc_route)
+                    segs_b = [raw_path[i:i+1].hex() for i in range(len(raw_path))]
+                    src_pfx = {pubkey[:n].upper() for n in (2, 4, 6) if len(pubkey) >= n}
+                    disc_route = " > ".join(s for s in segs_b if s.upper() not in src_pfx)
+                self._contact_routes[pubkey.upper()[:4]] = (new_hops, disc_route, time.time())
+                self._sync_route_to_store(pubkey, new_hops, disc_route)
                 logger.info(f"[contact path] {name}: hops={new_hops}, path={disc_route or 'direct'}")
                 self._log_event("path", name=name, pubkey=pubkey, hops=new_hops, route=disc_route)
         except Exception as e:
@@ -1215,24 +1471,41 @@ class MeshcorePoller:
     async def _login_to_repeater(self, contact, name: str, password: str):
         """Login to a repeater so it responds to status/telemetry requests."""
         try:
-            result = await self.mc.commands.send_login(contact, password)
-            if result.type == EventType.ERROR:
-                logger.warning(f"[{name}] Login failed: {result.payload}")
+            # Prefer send_login_sync (waits for mesh confirmation) if available
+            if hasattr(self.mc.commands, "send_login_sync"):
+                result = await self.mc.commands.send_login_sync(contact, password)
+                if result is None:
+                    logger.warning(f"[{name}] Login timed out")
+                    return False
             else:
-                logger.info(f"[{name}] Login sent (pwd={'default' if password == 'password' else 'custom'})")
+                result = await self.mc.commands.send_login(contact, password)
+                if result.type == EventType.ERROR:
+                    logger.warning(f"[{name}] Login failed: {result.payload}")
+                    return False
+            logger.info(f"[{name}] Login OK (pwd={'default' if password == 'password' else 'custom'})")
+            return True
         except Exception as e:
             logger.error(f"[{name}] Login error: {e}")
+            return False
 
     async def _request_status(self, pubkey: str, name: str, contact):
         """Request status from a repeater and update the store."""
         try:
+            _t0 = time.monotonic()
             status = await self.mc.commands.req_status_sync(contact, timeout=30)
+            _latency_ms = int((time.monotonic() - _t0) * 1000)
             if status is None:
                 logger.warning(f"[{name}] Status request timed out")
                 self.store.mark_poll_failed(pubkey)
+                # Alert: node went offline (only once per offline period)
+                state = self._alert_state.setdefault(pubkey, {})
+                if not state.get("offline"):
+                    state["offline"] = True
+                    self.store.log_alert(name, f"{name} is not responding to polls (offline)")
                 return
 
             updates = {}
+            updates["_latency_ms"] = _latency_ms
 
             if "bat" in status:
                 updates["battery_mv"] = status["bat"]
@@ -1266,12 +1539,44 @@ class MeshcorePoller:
                     break
 
             if updates:
-                self.store.update_repeater(pubkey, **updates)
+                latency_ms = updates.pop("_latency_ms", None)
+                self.store.update_repeater(pubkey, latency_ms=latency_ms, **updates)
                 logger.info(
                     f"[{name}] Status: {updates.get('battery_mv', '?')}mV, "
                     f"RSSI={updates.get('rssi', '?')}dBm, "
-                    f"SNR={updates.get('snr', '?')}dB"
+                    f"SNR={updates.get('snr', '?')}dB, "
+                    f"latency={latency_ms}ms"
                 )
+                # Validate stored route against SDK hop count — clear it if stale
+                contact_data = self._contacts.get(pubkey, self._contacts.get(pubkey.lower(), {}))
+                if isinstance(contact_data, dict):
+                    opl = contact_data.get("out_path_len", -1)
+                    sdk_poll_hops = (opl & 0x3F) if opl >= 64 else (opl if opl >= 0 else -1)
+                    if sdk_poll_hops >= 0:
+                        stored = self.store.get_route_by_prefix(pubkey[:8])
+                        if stored and stored[1]:
+                            segs = [s for s in stored[1].split('>') if s.strip()]
+                            if abs(len(segs) - sdk_poll_hops) > 1:
+                                self.store.update_route(pubkey, sdk_poll_hops, "")
+                                logger.debug(f"[{name}] Cleared stale route ({len(segs)} segs vs {sdk_poll_hops} hops)")
+
+                # Alert tracking
+                state = self._alert_state.setdefault(pubkey, {})
+                # Node came back online
+                if state.get("offline"):
+                    state["offline"] = False
+                    self.store.log_alert(name, f"{name} is back online")
+                # Low battery alert (below 20%, once per low-bat period)
+                bat_mv = updates.get("battery_mv", 0)
+                if bat_mv > 0:
+                    from data_store import RepeaterState
+                    low_thresh = 3500  # ~20% LiPo
+                    if bat_mv < low_thresh and not state.get("low_bat"):
+                        state["low_bat"] = True
+                        pct = max(0, min(100, round(((bat_mv - 3000) / 1200) * 100)))
+                        self.store.log_alert(name, f"{name} battery low: {pct}% ({bat_mv/1000:.2f}V)")
+                    elif bat_mv >= low_thresh:
+                        state["low_bat"] = False
 
         except Exception as e:
             logger.error(f"[{name}] Status request error: {e}")
@@ -1297,6 +1602,8 @@ class MeshcorePoller:
                     if sensor.get("channel") == 0:
                         updates["battery_voltage"] = float(value)
                         updates["battery_mv"] = int(float(value) * 1000)
+                elif sensor_type == "temperature" and value is not None:
+                    updates["temperature_c"] = round(float(value), 1)
 
             if updates:
                 self.store.update_repeater(pubkey, **updates)
@@ -1305,6 +1612,67 @@ class MeshcorePoller:
         except Exception as e:
             logger.error(f"[{name}] Telemetry request error: {e}")
 
+    async def _request_clock(self, pubkey: str, name: str, contact) -> None:
+        """Send clock command to a logged-in repeater and store the time offset vs system."""
+        try:
+            from datetime import datetime, timezone as _dtz
+            loop = asyncio.get_running_loop()
+            future = loop.create_future()
+            pk_pre = pubkey[:12].lower()
+
+            def _on_clock_resp(event):
+                if future.done():
+                    return
+                payload = event.payload if hasattr(event, "payload") else {}
+                if not isinstance(payload, dict):
+                    return
+                epk = str(payload.get("pubkey_prefix", "")).lower()
+                if epk and (epk.startswith(pk_pre[:8]) or pk_pre.startswith(epk[:8])):
+                    txt = payload.get("text", "")
+                    if txt:
+                        loop.call_soon_threadsafe(future.set_result, txt)
+
+            sub = self.mc.subscribe(EventType.CONTACT_MSG_RECV, _on_clock_resp)
+            try:
+                self._dont_save_contact_msgs = True
+                await self.mc.commands.send_cmd(contact, "clock")
+                response = await asyncio.wait_for(future, timeout=15.0)
+            except asyncio.TimeoutError:
+                logger.debug(f"[{name}] clock command timed out")
+                return
+            finally:
+                self.mc.unsubscribe(sub)
+                self._dont_save_contact_msgs = False
+
+            if not response:
+                return
+            response = response.strip()
+
+            # Try plain integer (Unix timestamp)
+            node_epoch = None
+            try:
+                node_epoch = int(response.split()[0])
+            except (ValueError, IndexError):
+                pass
+            # Try common datetime formats
+            if node_epoch is None:
+                for fmt in ("%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%Y/%m/%d %H:%M:%S"):
+                    try:
+                        dt = datetime.strptime(response[:19], fmt)
+                        node_epoch = int(dt.replace(tzinfo=_dtz.utc).timestamp())
+                        break
+                    except ValueError:
+                        continue
+            if node_epoch is None:
+                logger.debug(f"[{name}] Could not parse clock response: {response!r}")
+                return
+
+            offset_s = round(node_epoch - time.time(), 1)
+            self.store.update_repeater(pubkey, clock_offset_s=offset_s)
+            logger.info(f"[{name}] Clock offset: {offset_s:+.1f}s")
+        except Exception as e:
+            logger.debug(f"[{name}] Clock request error: {e}")
+
     async def ping_repeater(self, pubkey: str) -> dict:
         """Request fresh status and telemetry from a repeater, updating the store."""
         if not self.mc:
@@ -1312,7 +1680,7 @@ class MeshcorePoller:
 
         contact = self._find_contact(pubkey)
         if contact is None:
-            await self._refresh_contacts()
+            await self._refresh_contacts(configured_only=not cfg.get_pull_contacts_on_start())
             contact = self._find_contact(pubkey)
         if contact is None:
             return {"ok": False, "error": "Repeater not found in contacts — may be out of range"}
@@ -1329,7 +1697,8 @@ class MeshcorePoller:
 
         start = time.monotonic()
         try:
-            await self._login_to_repeater(contact, name, admin_pass)
+            if admin_pass:
+                await self._login_to_repeater(contact, name, admin_pass)
             await asyncio.sleep(1)
             await self._request_status(pubkey, name, contact)
             await asyncio.sleep(1)
@@ -1341,6 +1710,56 @@ class MeshcorePoller:
             logger.error(f"[{name}] Manual refresh error: {e}")
             return {"ok": False, "error": str(e)}
 
+    async def reboot_device(self) -> dict:
+        """Send reboot command to the companion device."""
+        if not self.mc:
+            return {"ok": False, "error": "Not connected"}
+        try:
+            await self.mc.commands.reboot()
+            logger.info("[companion] reboot command sent")
+            self._needs_reconnect = True
+            return {"ok": True}
+        except Exception as e:
+            logger.error(f"[companion] reboot failed: {e}")
+            return {"ok": False, "error": str(e)}
+
+    async def get_node_id_mode(self) -> dict:
+        """Read path_hash_mode from the companion device (0=1-byte, 1=2-byte, 2=3-byte)."""
+        if not self.mc:
+            # Fall back to inferring mode from saved node_id_chars
+            chars = cfg.get_settings().get("node_id_chars", 2)
+            mode = max(0, (int(chars) // 2) - 1)
+            return {"ok": True, "mode": mode, "inferred": True}
+        if not hasattr(self.mc.commands, "get_path_hash_mode"):
+            chars = cfg.get_settings().get("node_id_chars", 2)
+            mode = max(0, (int(chars) // 2) - 1)
+            logger.info("[companion] SDK does not support get_path_hash_mode, using config value")
+            return {"ok": True, "mode": mode, "inferred": True}
+        try:
+            mode = await self.mc.commands.get_path_hash_mode()
+            return {"ok": True, "mode": mode}
+        except Exception as e:
+            logger.info(f"[companion] get_path_hash_mode failed: {e}")
+            chars = cfg.get_settings().get("node_id_chars", 2)
+            mode = max(0, (int(chars) // 2) - 1)
+            return {"ok": True, "mode": mode, "inferred": True}
+
+    async def set_node_id_mode(self, mode: int) -> dict:
+        """Set path_hash_mode on the companion device (0=1-byte, 1=2-byte, 2=3-byte)."""
+        if not self.mc:
+            return {"ok": False, "error": "Not connected"}
+        if not hasattr(self.mc.commands, "set_path_hash_mode"):
+            return {"ok": False, "error": "SDK version does not support set_path_hash_mode — update meshcore package"}
+        try:
+            event = await self.mc.commands.set_path_hash_mode(mode)
+            if event and event.type == EventType.ERROR:
+                return {"ok": False, "error": str(event.payload)}
+            logger.info(f"[companion] path_hash_mode set to {mode}")
+            return {"ok": True, "mode": mode}
+        except Exception as e:
+            logger.error(f"[companion] set_path_hash_mode failed: {e}")
+            return {"ok": False, "error": str(e)}
+
     async def send_advert(self, pubkey: str) -> dict:
         """Login to a repeater and command it to broadcast a flood advertisement."""
         if not self.mc:
@@ -1348,7 +1767,7 @@ class MeshcorePoller:
 
         contact = self._find_contact(pubkey)
         if contact is None:
-            await self._refresh_contacts()
+            await self._refresh_contacts(configured_only=not cfg.get_pull_contacts_on_start())
             contact = self._find_contact(pubkey)
         if contact is None:
             return {"ok": False, "error": "Repeater not found in contacts — may be out of range"}
@@ -1363,12 +1782,107 @@ class MeshcorePoller:
                 break
 
         try:
-            await self._login_to_repeater(contact, name, admin_pass)
-            await asyncio.sleep(0.5)
+            if admin_pass:
+                await self._login_to_repeater(contact, name, admin_pass)
+                await asyncio.sleep(5.0)  # Wait for login to propagate over RF before sending command
             await self.mc.commands.send_cmd(contact, "advert")
             logger.info(f"[{name}] Flood advertisement command sent")
             self._log_event("advert_sent", name=name, pubkey=pubkey)
             return {"ok": True}
         except Exception as e:
             logger.error(f"[{name}] Failed to send advert: {e}")
+            return {"ok": False, "error": str(e)}
+
+    async def login_repeater(self, pubkey: str) -> dict:
+        """Login to a repeater and return success/failure."""
+        if not self.mc:
+            return {"ok": False, "error": "Not connected to companion device"}
+
+        contact = self._find_contact(pubkey)
+        if contact is None:
+            await self._refresh_contacts(configured_only=not cfg.get_pull_contacts_on_start())
+            contact = self._find_contact(pubkey)
+        if contact is None:
+            return {"ok": False, "error": "Repeater not found — may be out of range"}
+
+        name = pubkey[:8]
+        admin_pass = "password"
+        for r in cfg.get_repeaters():
+            pk = r["pubkey"]
+            if pk == pubkey or pk.startswith(pubkey) or pubkey.startswith(pk):
+                admin_pass = r.get("admin_pass", "password")
+                name = r.get("name", name)
+                break
+
+        success = await self._login_to_repeater(contact, name, admin_pass)
+        if not success:
+            return {"ok": False, "error": f"Repeater unreachable — may be out of range"}
+
+        return {"ok": True, "name": name}
+
+    async def send_repeater_cmd(self, pubkey: str, cmd: str) -> dict:
+        """Login to a repeater and send an arbitrary CLI command."""
+        if not self.mc:
+            return {"ok": False, "error": "Not connected to companion device"}
+
+        contact = self._find_contact(pubkey)
+        if contact is None:
+            await self._refresh_contacts(configured_only=not cfg.get_pull_contacts_on_start())
+            contact = self._find_contact(pubkey)
+        if contact is None:
+            return {"ok": False, "error": "Repeater not found — may be out of range"}
+
+        name = pubkey[:8]
+        admin_pass = "password"
+        for r in cfg.get_repeaters():
+            pk = r["pubkey"]
+            if pk == pubkey or pk.startswith(pubkey) or pubkey.startswith(pk):
+                admin_pass = r.get("admin_pass", "password")
+                name = r.get("name", name)
+                break
+
+        try:
+            # Commands that reboot the repeater never return a text response
+            if cmd.lower().strip() in ("reboot", "clkreboot", "poweroff", "shutdown"):
+                await self.mc.commands.send_cmd(contact, cmd)
+                logger.info(f"[{name}] CMD sent (no response expected): {cmd}")
+                self.store.log_cli(name, cmd, None)
+                return {"ok": True, "response": f"({cmd} does not return a response)"}
+
+            # Subscribe to CONTACT_MSG_RECV before sending so we never miss a fast reply.
+            # We don't filter by pubkey_prefix here — the format varies by firmware version
+            # and we guard against saving unrelated messages via _dont_save_contact_msgs.
+            loop = asyncio.get_running_loop()
+            future = loop.create_future()
+
+            def on_cmd_response(event):
+                if future.done():
+                    return
+                payload = event.payload if hasattr(event, "payload") else {}
+                if not isinstance(payload, dict):
+                    return
+                txt = payload.get("text", "")
+                if txt:
+                    loop.call_soon_threadsafe(future.set_result, txt)
+
+            sub = self.mc.subscribe(EventType.CONTACT_MSG_RECV, on_cmd_response)
+            try:
+                self._dont_save_contact_msgs = True
+                await self.mc.commands.send_cmd(contact, cmd)
+                logger.info(f"[{name}] CMD sent: {cmd}")
+                response = await asyncio.wait_for(future, timeout=15.0)
+            except asyncio.TimeoutError:
+                logger.warning(f"[{name}] CMD response timed out after 15s: {cmd}")
+                response = None
+            finally:
+                self.mc.unsubscribe(sub)
+                self._dont_save_contact_msgs = False
+
+            self.store.log_cli(name, cmd, response)
+            if response is None:
+                return {"ok": False, "error": f"No response from {name} (timed out)"}
+            return {"ok": True, "response": response}
+        except Exception as e:
+            self._dont_save_contact_msgs = False
+            logger.error(f"[{name}] CMD error: {e}")
             return {"ok": False, "error": str(e)}

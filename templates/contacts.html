@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contacts - MeshCore Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css?v={{ v }}">
+  <style>
+    .contacts-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 0 1.25rem;
+      border-bottom: 1px solid #1e293b;
+      margin-bottom: 1.5rem;
+      max-width: 1200px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .back-btn {
+      background: none;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      font-family: inherit;
+      text-decoration: none;
+      transition: color 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+    .back-btn:hover { color: #38bdf8; border-color: #38bdf8; }
+    .contacts-title { font-size: 1.3rem; font-weight: 700; color: #38bdf8; }
+    .contacts-count { font-size: 0.8rem; color: #64748b; margin-left: auto; }
+
+    .contacts-body {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .contacts-controls {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .contacts-search {
+      flex: 1;
+      min-width: 180px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      font-size: 0.875rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      font-family: inherit;
+    }
+    .contacts-search:focus { outline: none; border-color: #38bdf8; }
+    .contacts-search::placeholder { color: #475569; }
+
+    .filter-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .filter-pill {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .filter-pill:hover { border-color: #64748b; color: #e2e8f0; }
+    .filter-pill.active { background: #1e3a5f; border-color: #38bdf8; color: #38bdf8; }
+
+    .contacts-table-wrap {
+      overflow-x: auto;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    thead th {
+      background: #0f172a;
+      color: #64748b;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.6rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid #1e293b;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+    thead th:hover { color: #94a3b8; }
+    thead th .sort-arrow { margin-left: 0.25rem; opacity: 0.4; }
+    thead th.sorted .sort-arrow { opacity: 1; color: #38bdf8; }
+    tbody tr {
+      border-bottom: 1px solid #0f172a;
+      transition: background 0.1s;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #1e293b44; }
+    td {
+      padding: 0.55rem 0.75rem;
+      color: #e2e8f0;
+      vertical-align: middle;
+    }
+    .td-name { font-weight: 600; color: #f1f5f9; }
+    .td-nodeid {
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+    .td-hops { color: #94a3b8; text-align: center; }
+    .td-path {
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #64748b;
+      max-width: 180px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .hop-chip {
+      color: #7dd3fc;
+      font-family: monospace;
+    }
+    .path-view-btn {
+      cursor: pointer;
+      font-size: 0.72rem;
+      color: #38bdf8;
+      border-bottom: 1px dashed #38bdf8;
+      background: none;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      padding: 0;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .path-view-btn:hover { color: #7dd3fc; }
+    /* Path popup */
+    .path-popup-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9000;
+    }
+    .path-popup {
+      position: fixed;
+      z-index: 9001;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      min-width: 220px;
+      max-width: 320px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    .path-popup-title {
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-bottom: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .path-popup-hops {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .path-hop-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .path-hop-id {
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: #7dd3fc;
+      min-width: 2.5rem;
+    }
+    .path-hop-name {
+      font-size: 0.82rem;
+      color: #e2e8f0;
+    }
+    .path-hop-name.unknown { color: #475569; font-style: italic; }
+    .path-hop-arrow {
+      font-size: 0.75rem;
+      color: #334155;
+      margin: 0.1rem 0;
+      padding-left: 0.8rem;
+    }
+    .path-popup-you {
+      font-size: 0.82rem;
+      color: #4ade80;
+      padding-left: 0.8rem;
+      margin-top: 0.1rem;
+    }
+    .td-gps { white-space: nowrap; }
+    .gps-link {
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #4ade80;
+      text-decoration: none;
+      border-bottom: 1px dashed #4ade8066;
+    }
+    .gps-link:hover { color: #86efac; border-bottom-color: #86efac; }
+    .gps-none { color: #334155; font-size: 0.75rem; }
+    .td-lastseen { color: #64748b; white-space: nowrap; font-size: 0.78rem; }
+    .td-pk-pre { font-family: monospace; font-size: 0.65rem; color: #475569; margin-left: 0.4rem; }
+    .type-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .badge-Repeater { background: #1a2f4a; color: #38bdf8; }
+    .badge-Contact  { background: #1a2a1a; color: #4ade80; }
+    .badge-Advert   { background: #2a1a0f; color: #fb923c; }
+    .gps-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #4ade80;
+    }
+    .cb-col { width: 2rem; text-align: center; }
+    input[type=checkbox] { accent-color: #38bdf8; cursor: pointer; width: 14px; height: 14px; }
+    .delete-bar {
+      display: none;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background: #1e1a0f;
+      border: 1px solid #7f1d1d;
+      border-radius: 6px;
+    }
+    .delete-bar.visible { display: flex; }
+    .delete-bar-text { color: #fca5a5; font-size: 0.85rem; flex: 1; }
+    .delete-btn {
+      background: #7f1d1d;
+      border: 1px solid #ef4444;
+      color: #fca5a5;
+      font-size: 0.8rem;
+      padding: 0.35rem 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+    .delete-btn:hover { background: #991b1b; }
+    .cancel-btn {
+      background: none;
+      border: 1px solid #334155;
+      color: #64748b;
+      font-size: 0.8rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .cancel-btn:hover { color: #94a3b8; border-color: #64748b; }
+    tr.selected td { background: #1a2030; }
+    .gps-dot.no-gps { background: #334155; }
+    .no-data-row td {
+      text-align: center;
+      color: #475569;
+      padding: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Path detail popup -->
+  <div id="pathPopupOverlay" class="path-popup-overlay" style="display:none" onclick="closePathPopup()"></div>
+  <div id="pathPopup" class="path-popup" style="display:none"></div>
+
+  <header>
+    <div class="header-title">
+      <h1>Contacts</h1>
+      <div class="header-meta">
+        <div class="header-conn-mini"><span class="status-dot unknown" id="miniConnDot"></span><span id="miniConnText">—</span></div>
+      </div>
+    </div>
+    <nav class="nav-group">
+      <a href="/" class="nav-btn" title="Dashboard">Dashboard</a>
+      <a href="/map" class="nav-btn" title="Network Map">Map</a>
+      <a href="/messages" class="nav-btn" title="Messages">Messages</a>
+      <a href="/packets" class="nav-btn" title="Packets">Packets</a>
+      <a href="/contacts" class="nav-btn nav-btn-active" title="Contacts">Contacts</a>
+      <a href="/logs" class="nav-btn" title="Activity Logs">Logs</a>
+      <a href="/settings" class="nav-btn nav-settings" title="Settings">&#9881;</a>
+    </nav>
+  </header>
+
+  <div class="contacts-header">
+    <span class="contacts-count" id="contactsCount"></span>
+  </div>
+
+  <div class="contacts-body">
+    <div class="contacts-controls">
+      <input type="text" id="searchBox" class="contacts-search" placeholder="Search name or node ID&hellip;" oninput="applyFilters()">
+      <div class="filter-pills">
+        <span class="filter-pill active" data-filter="all" onclick="setTypeFilter('all', this)">All</span>
+        <span class="filter-pill" data-filter="Repeater" onclick="setTypeFilter('Repeater', this)">Repeaters</span>
+        <span class="filter-pill" data-filter="Contact" onclick="setTypeFilter('Contact', this)">Contacts</span>
+        <span class="filter-pill" data-filter="Advert" onclick="setTypeFilter('Advert', this)">Adverts</span>
+        <span class="filter-pill" data-filter="gps" onclick="setTypeFilter('gps', this)">GPS only</span>
+      </div>
+    </div>
+
+    <div class="delete-bar" id="deleteBar">
+      <span class="delete-bar-text" id="deleteBarText"></span>
+      <button class="cancel-btn" onclick="clearSelection()">Cancel</button>
+      <button class="delete-btn" onclick="deleteSelected()">&#128465; Delete Selected</button>
+    </div>
+
+    <div class="contacts-table-wrap">
+      <table id="contactsTable">
+        <thead>
+          <tr>
+            <th class="cb-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
+            <th onclick="sortBy('name')">Name <span class="sort-arrow" id="arrow-name"></span></th>
+            <th onclick="sortBy('nodeid')">Node ID <span class="sort-arrow" id="arrow-nodeid"></span></th>
+            <th onclick="sortBy('type')">Type <span class="sort-arrow" id="arrow-type"></span></th>
+            <th onclick="sortBy('hops')">Hops <span class="sort-arrow" id="arrow-hops"></span></th>
+            <th onclick="sortBy('path')">Path <span class="sort-arrow" id="arrow-path"></span></th>
+            <th onclick="sortBy('gps')">GPS <span class="sort-arrow" id="arrow-gps"></span></th>
+            <th onclick="sortBy('last_seen')">Last Seen <span class="sort-arrow" id="arrow-last_seen"></span></th>
+          </tr>
+        </thead>
+        <tbody id="contactsTbody">
+          <tr class="no-data-row"><td colspan="8">Loading&hellip;</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    var _allContacts = [];
+    var _filtered = [];
+    var _selected = new Set();
+    var _typeFilter = 'all';
+    var _sortKey = 'last_seen';
+    var _sortAsc = false;
+    var _nodeIdChars = 2;
+    var _lastCheckedIdx = -1;
+    var _nodeNames = {};   // pubkey prefix (lower) → name
+
+    fetch('/api/settings').then(r => r.json()).then(s => {
+      _nodeIdChars = parseInt(s.node_id_chars) || 2;
+      loadContacts();
+    }).catch(() => loadContacts());
+
+    fetch('/api/node-names').then(r => r.json()).then(d => { _nodeNames = d || {}; }).catch(() => {});
+
+    function loadContacts() {
+      fetch('/api/contacts-list').then(r => r.json()).then(data => {
+        _allContacts = data;
+        applyFilters();
+      }).catch(e => {
+        document.getElementById('contactsTbody').innerHTML =
+          '<tr class="no-data-row"><td colspan="7">Failed to load contacts</td></tr>';
+      });
+    }
+
+    function setTypeFilter(f, el) {
+      _typeFilter = f;
+      document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+      el.classList.add('active');
+      applyFilters();
+    }
+
+    function applyFilters() {
+      _lastCheckedIdx = -1;
+      var q = (document.getElementById('searchBox').value || '').toLowerCase().trim();
+      _filtered = _allContacts.filter(c => {
+        if (_typeFilter === 'gps') {
+          if (!c.lat || !c.lon) return false;
+        } else if (_typeFilter !== 'all') {
+          if (c.type !== _typeFilter) return false;
+        }
+        if (q) {
+          var name = (c.name || '').toLowerCase();
+          var pk = (c.pubkey || '').toLowerCase();
+          if (!name.includes(q) && !pk.includes(q)) return false;
+        }
+        return true;
+      });
+      sortFiltered();
+    }
+
+    function sortBy(key) {
+      if (_sortKey === key) {
+        _sortAsc = !_sortAsc;
+      } else {
+        _sortKey = key;
+        _sortAsc = key === 'name';
+      }
+      sortFiltered();
+      updateSortArrows();
+    }
+
+    function sortFiltered() {
+      var key = _sortKey;
+      var asc = _sortAsc;
+      _filtered.sort(function(a, b) {
+        var va, vb;
+        if (key === 'name') {
+          va = (a.name || '').toLowerCase();
+          vb = (b.name || '').toLowerCase();
+        } else if (key === 'nodeid') {
+          va = (a.pubkey || '').substring(0, _nodeIdChars).toLowerCase();
+          vb = (b.pubkey || '').substring(0, _nodeIdChars).toLowerCase();
+        } else if (key === 'type') {
+          va = a.type || '';
+          vb = b.type || '';
+        } else if (key === 'hops') {
+          va = a.hops >= 0 ? a.hops : 999;
+          vb = b.hops >= 0 ? b.hops : 999;
+        } else if (key === 'gps') {
+          va = (a.lat && a.lon) ? 0 : 1;
+          vb = (b.lat && b.lon) ? 0 : 1;
+        } else if (key === 'last_seen') {
+          va = a.last_seen || 0;
+          vb = b.last_seen || 0;
+        } else if (key === 'path') {
+          // contacts with a known path sort before those without
+          va = a.route_path ? a.route_path.toLowerCase() : '￿';
+          vb = b.route_path ? b.route_path.toLowerCase() : '￿';
+        } else {
+          va = a[key] || '';
+          vb = b[key] || '';
+        }
+        if (va < vb) return asc ? -1 : 1;
+        if (va > vb) return asc ? 1 : -1;
+        return 0;
+      });
+      renderTable();
+    }
+
+    function updateSortArrows() {
+      var keys = ['name','nodeid','type','hops','path','gps','last_seen'];
+      keys.forEach(function(k) {
+        var el = document.getElementById('arrow-' + k);
+        if (!el) return;
+        var th = el.parentElement;
+        th.classList.toggle('sorted', k === _sortKey);
+        el.textContent = k === _sortKey ? (_sortAsc ? '▲' : '▼') : '';
+      });
+    }
+
+    function fmtAge(ts) {
+      if (!ts) return '—';
+      var diff = Math.max(0, Math.floor(Date.now() / 1000 - ts));
+      if (diff < 60) return diff + 's ago';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      return Math.floor(diff / 86400) + 'd ago';
+    }
+
+    function renderTable() {
+      var tbody = document.getElementById('contactsTbody');
+      document.getElementById('contactsCount').textContent = _filtered.length + ' / ' + _allContacts.length + ' contacts';
+
+      if (_filtered.length === 0) {
+        tbody.innerHTML = '<tr class="no-data-row"><td colspan="8">No contacts found</td></tr>';
+        document.getElementById('selectAll').checked = false;
+        return;
+      }
+
+      var rows = _filtered.map(function(c, idx) {
+        var pk = c.pubkey || '';
+        var nodeId = pk.substring(0, _nodeIdChars).toUpperCase();
+        var hasGps = c.lat && c.lon;
+        var hopsStr = c.hops >= 0 ? c.hops : '—';
+        var pathHtml = '—';
+        if (c.route_path) {
+          var hops = c.route_path.split('>').map(function(s) { return s.trim(); });
+          var hopData = JSON.stringify(hops).replace(/"/g, '&quot;');
+          var preview = hops.slice(0, 2).map(function(id) {
+            return '<span class="hop-chip">' + escHtml(id) + '</span>';
+          }).join('<span style="color:#475569"> › </span>');
+          if (hops.length > 2) preview += '<span style="color:#475569"> › …</span>';
+          pathHtml = '<button class="path-view-btn" data-hops="' + hopData + '" data-contact="' + escHtml(c.name || '') + '">' +
+            preview + '</button>';
+        }
+        var typeBadge = '<span class="type-badge badge-' + c.type + '">' + c.type + '</span>';
+        var gpsCell;
+        if (hasGps) {
+          var latStr = c.lat.toFixed(5);
+          var lonStr = c.lon.toFixed(5);
+          var mapsUrl = '/map?lat=' + c.lat + '&lon=' + c.lon + '&name=' + encodeURIComponent(c.name || '');
+          gpsCell = '<a class="gps-link" href="' + mapsUrl + '" title="Show on map">' +
+            latStr + ', ' + lonStr + '</a>';
+        } else {
+          gpsCell = '<span class="gps-none">—</span>';
+        }
+        var checked = _selected.has(pk) ? ' checked' : '';
+        var selClass = _selected.has(pk) ? ' selected' : '';
+        var disabled = c.type === 'Repeater' ? ' disabled title="Remove repeaters via Settings"' : '';
+
+        return '<tr class="contact-row' + selClass + '" data-pk="' + escHtml(pk) + '">' +
+          '<td class="cb-col"><input type="checkbox" class="row-cb"' + checked + disabled +
+            ' onclick="toggleRow(event, this)" data-pk="' + escHtml(pk) + '" data-idx="' + idx + '"></td>' +
+          '<td class="td-name">' + escHtml(c.name || '—') +
+            (pk ? '<span class="td-pk-pre">' + pk.substring(0, 8).toUpperCase() + '</span>' : '') + '</td>' +
+          '<td class="td-nodeid" title="' + escHtml(pk) + '">' + escHtml(nodeId) + '</td>' +
+          '<td>' + typeBadge + '</td>' +
+          '<td class="td-hops">' + hopsStr + '</td>' +
+          '<td class="td-path">' + pathHtml + '</td>' +
+          '<td class="td-gps">' + gpsCell + '</td>' +
+          '<td class="td-lastseen">' + fmtAge(c.last_seen) + '</td>' +
+        '</tr>';
+      }).join('');
+
+      tbody.innerHTML = rows;
+      updateDeleteBar();
+    }
+
+    function closePathPopup() {
+      document.getElementById('pathPopup').style.display = 'none';
+      document.getElementById('pathPopupOverlay').style.display = 'none';
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closePathPopup();
+    });
+
+    // Click a path button to show full path popup
+    document.getElementById('contactsTbody').addEventListener('click', function(e) {
+      var btn = e.target.closest('.path-view-btn');
+      if (!btn) return;
+      e.stopPropagation();
+
+      var hops = JSON.parse(btn.dataset.hops.replace(/&quot;/g, '"'));
+      var contactName = btn.dataset.contact || 'Contact';
+
+      var rows = hops.map(function(id) {
+        var name = _nodeNames[id.toLowerCase()] || _nodeNames[id.substring(0,2).toLowerCase()];
+        return '<div class="path-hop-row">' +
+          '<span class="path-hop-id">' + escHtml(id) + '</span>' +
+          '<span class="path-hop-name' + (name ? '' : ' unknown') + '">' + escHtml(name || '—') + '</span>' +
+        '</div>' +
+        '<div class="path-hop-arrow">↓</div>';
+      }).join('');
+
+      var popup = document.getElementById('pathPopup');
+      popup.innerHTML =
+        '<div class="path-popup-title">Path from ' + escHtml(contactName) + '</div>' +
+        '<div class="path-popup-hops">' + rows +
+          '<div class="path-popup-you">⬤ You</div>' +
+        '</div>';
+
+      // Position near the button
+      var rect = btn.getBoundingClientRect();
+      var top = Math.min(rect.bottom + 8, window.innerHeight - 300);
+      var left = Math.min(rect.left, window.innerWidth - 340);
+      popup.style.top = top + 'px';
+      popup.style.left = left + 'px';
+      popup.style.display = 'block';
+      document.getElementById('pathPopupOverlay').style.display = 'block';
+    });
+
+    function toggleRow(event, cb) {
+      var idx = parseInt(cb.dataset.idx);
+      var pk = cb.dataset.pk;
+
+      if (event.shiftKey && _lastCheckedIdx >= 0 && _lastCheckedIdx !== idx) {
+        // Range select: find all checkboxes and check/uncheck those in range
+        var lo = Math.min(_lastCheckedIdx, idx);
+        var hi = Math.max(_lastCheckedIdx, idx);
+        document.querySelectorAll('.row-cb').forEach(function(box) {
+          var boxIdx = parseInt(box.dataset.idx);
+          if (boxIdx >= lo && boxIdx <= hi && !box.disabled) {
+            box.checked = cb.checked;
+            var boxPk = box.dataset.pk;
+            if (cb.checked) { _selected.add(boxPk); } else { _selected.delete(boxPk); }
+            var row = box.closest('tr');
+            if (row) row.classList.toggle('selected', cb.checked);
+          }
+        });
+      } else {
+        if (cb.checked) { _selected.add(pk); } else { _selected.delete(pk); }
+        var row = cb.closest('tr');
+        if (row) row.classList.toggle('selected', cb.checked);
+        _lastCheckedIdx = idx;
+      }
+
+      updateDeleteBar();
+      var all = document.querySelectorAll('.row-cb:not([disabled])');
+      var checkedBoxes = document.querySelectorAll('.row-cb:not([disabled]):checked');
+      document.getElementById('selectAll').checked = all.length > 0 && all.length === checkedBoxes.length;
+    }
+
+    function toggleSelectAll(masterCb) {
+      document.querySelectorAll('.row-cb:not([disabled])').forEach(function(cb) {
+        cb.checked = masterCb.checked;
+        var pk = cb.dataset.pk;
+        if (masterCb.checked) { _selected.add(pk); } else { _selected.delete(pk); }
+        var row = cb.closest('tr');
+        if (row) row.classList.toggle('selected', masterCb.checked);
+      });
+      updateDeleteBar();
+    }
+
+    function clearSelection() {
+      _selected.clear();
+      document.querySelectorAll('.row-cb').forEach(function(cb) { cb.checked = false; });
+      document.querySelectorAll('.contact-row').forEach(function(r) { r.classList.remove('selected'); });
+      document.getElementById('selectAll').checked = false;
+      updateDeleteBar();
+    }
+
+    function updateDeleteBar() {
+      var bar = document.getElementById('deleteBar');
+      var n = _selected.size;
+      if (n > 0) {
+        bar.classList.add('visible');
+        document.getElementById('deleteBarText').textContent = n + ' contact' + (n !== 1 ? 's' : '') + ' selected';
+      } else {
+        bar.classList.remove('visible');
+      }
+    }
+
+    function deleteSelected() {
+      if (_selected.size === 0) return;
+      var names = _filtered.filter(function(c) { return _selected.has(c.pubkey); })
+                           .map(function(c) { return c.name || c.pubkey.substring(0, 6); });
+      if (!confirm('Delete ' + _selected.size + ' contact(s)?\n\n' + names.join(', '))) return;
+
+      fetch('/api/contacts-list', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pubkeys: Array.from(_selected) })
+      }).then(function(r) { return r.json(); }).then(function(res) {
+        if (res.ok) {
+          _selected.clear();
+          loadContacts();
+        } else {
+          alert('Delete failed: ' + (res.error || 'unknown error'));
+        }
+      }).catch(function() { alert('Delete request failed'); });
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    updateSortArrows();
+  </script>
+  <script src="/static/nav.js?v={{ v }}"></script>
+  <script>
+  (function(){function _mc(){fetch('/api/connection').then(function(r){return r.json();}).then(function(d){var dot=document.getElementById('miniConnDot'),txt=document.getElementById('miniConnText');if(!dot)return;dot.className='status-dot '+(d.connected?'online':'offline');txt.textContent=d.connected?'Connected':'Disconnected';}).catch(function(){var dot=document.getElementById('miniConnDot');if(dot)dot.className='status-dot offline';});}
+  _mc();setInterval(_mc,10000);})();
+  </script>
+</body>
+</html>

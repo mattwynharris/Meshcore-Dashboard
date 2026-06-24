@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Network Map - MeshCore Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ v }}">
   <link rel="stylesheet" href="/static/leaflet.css">
   <style>
     /* Override global body padding so the map fills the full viewport */
@@ -30,6 +30,16 @@
       position: absolute;
       top: 0; right: 0; bottom: 0; left: 0;
       background: #0f172a;
+    }
+
+    /* Live path animation */
+    @keyframes flow-dash {
+      from { stroke-dashoffset: 16; }
+      to   { stroke-dashoffset: 0; }
+    }
+    .live-path-line {
+      animation: flow-dash 0.9s linear infinite;
+      filter: drop-shadow(0 0 4px #38bdf8);
     }
 
     /* No-GPS sidebar panel */
@@ -89,53 +99,108 @@
     .popup-unknown { color: #94a3b8; }
 
     /* Top-right button bar */
-    .map-btn-bar {
+    /* Hamburger menu */
+    .map-menu-wrap {
       position: absolute;
       top: 1rem;
       right: 1rem;
-      z-index: 1000;
-      display: flex;
-      gap: 0.4rem;
+      z-index: 1001;
     }
-    .map-refresh-btn, .map-sethome-btn, .map-contacts-btn {
-      background: rgba(15, 23, 42, 0.9);
+    .map-hamburger {
+      background: rgba(15, 23, 42, 0.92);
       border: 1px solid #334155;
       color: #94a3b8;
-      border-radius: 8px;
-      padding: 0.35rem 0.75rem;
-      font-size: 0.78rem;
+      border-radius: 10px;
+      width: 42px;
+      height: 42px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
       cursor: pointer;
+      padding: 0;
+    }
+    .map-hamburger:hover { border-color: #38bdf8; color: #38bdf8; }
+    .map-hamburger.open { border-color: #38bdf8; color: #38bdf8; background: rgba(15,23,42,0.98); }
+    .map-hamburger span {
+      display: block;
+      width: 18px;
+      height: 2px;
+      background: currentColor;
+      border-radius: 2px;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+    .map-hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .map-hamburger.open span:nth-child(2) { opacity: 0; }
+    .map-hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+    .map-menu-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      right: 0;
+      background: rgba(10, 15, 26, 0.97);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 0.4rem;
+      min-width: 190px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .map-menu-dropdown.open { display: block; }
+
+    /* Each row in the dropdown */
+    .map-menu-item {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      background: none;
+      border: none;
+      border-radius: 8px;
+      color: #94a3b8;
+      font-size: 0.88rem;
       font-family: inherit;
-      transition: color 0.2s, border-color 0.2s;
+      padding: 0.6rem 0.85rem;
+      cursor: pointer;
+      text-align: left;
+      gap: 0.6rem;
+      transition: background 0.15s, color 0.15s;
       white-space: nowrap;
     }
-    .map-refresh-btn:hover { color: #38bdf8; border-color: #38bdf8; }
-    .map-sethome-btn:hover { color: #facc15; border-color: #facc15; }
-    .map-contacts-btn:hover { color: #a78bfa; border-color: #a78bfa; }
-    .map-paths-btn { background: rgba(15, 23, 42, 0.9); border: 1px solid #334155; color: #94a3b8;
-      border-radius: 8px; padding: 0.35rem 0.75rem; font-size: 0.78rem; cursor: pointer;
-      font-family: inherit; transition: color 0.2s, border-color 0.2s; white-space: nowrap; }
-    .map-paths-btn:hover { color: #34d399; border-color: #34d399; }
-    .map-paths-btn.active { color: #34d399; border-color: #34d399; background: rgba(52,211,153,0.1); }
-    .map-sethome-btn.picking {
-      color: #facc15;
-      border-color: #facc15;
-      background: rgba(250, 204, 21, 0.12);
+    .map-menu-item:hover { background: rgba(56,189,248,0.07); color: #e2e8f0; }
+    .map-menu-item.active { color: #e2e8f0; font-weight: 600; }
+    .map-menu-item .mmi-icon { width: 1.1em; text-align: center; }
+    .map-menu-item .mmi-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+      border: 2px solid currentColor; margin-left: auto;
     }
-    .map-contacts-btn.active {
-      color: #a78bfa;
-      border-color: #a78bfa;
-      background: rgba(167, 139, 250, 0.12);
-    }
+    /* Active-state colours per button */
+    .map-menu-item.active-green  { color: #34d399; }
+    .map-menu-item.active-green:hover { background: rgba(52,211,153,0.08); }
+    .map-menu-item.active-purple { color: #a78bfa; }
+    .map-menu-item.active-purple:hover { background: rgba(167,139,250,0.08); }
+    .map-menu-item.active-cyan   { color: #38bdf8; }
+    .map-menu-item.active-cyan:hover { background: rgba(56,189,248,0.08); }
+    .map-menu-item.active-yellow { color: #fbbf24; }
+    .map-menu-item.active-yellow:hover { background: rgba(251,191,36,0.08); }
+    .map-menu-item.active-amber  { color: #f59e0b; }
+    .map-menu-separator { height: 1px; background: #1e293b; margin: 0.3rem 0.4rem; }
+
     /* crosshair cursor while in pick mode */
     .map-picking { cursor: crosshair !important; }
 
     /* Legend overlay */
-    .map-legend {
+    .map-left-col {
       position: absolute;
       top: 1rem;
       left: 1rem;
       z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-width: 220px;
+    }
+    .map-legend {
       background: rgba(15, 23, 42, 0.9);
       border: 1px solid #334155;
       border-radius: 8px;
@@ -151,22 +216,58 @@
     .legend-dot.offline { background: #f87171; }
     .legend-dot.unknown { background: #64748b; }
     .legend-dot.gateway { background: #38bdf8; }
+    .legend-sep { border-top: 1px solid #1e293b; margin: 0.35rem 0 0.2rem; }
+    .legend-live-header {
+      display: flex; align-items: center; gap: 0.45rem;
+      font-size: 0.68rem; color: #38bdf8; font-weight: 700; padding: 0.1rem 0;
+    }
+    .legend-live-line-demo {
+      width: 22px; height: 2px; flex-shrink: 0; border-radius: 2px;
+      background: repeating-linear-gradient(to right, #38bdf8 0px, #38bdf8 6px, transparent 6px, transparent 9px);
+      box-shadow: 0 0 4px rgba(56,189,248,0.7);
+    }
+    .legend-live-paths { margin-top: 0.25rem; max-height: 110px; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 0.25rem; }
+    .legend-live-paths::-webkit-scrollbar { display: none; }
+    .legend-live-item {
+      display: flex; align-items: center; flex-wrap: nowrap; gap: 0;
+      cursor: pointer; border-radius: 4px; padding: 2px 3px;
+      transition: background 0.15s;
+    }
+    .legend-live-item:hover { background: rgba(56,189,248,0.08); }
+    .llpath { display: flex; align-items: center; flex: 1; min-width: 0; overflow: hidden; }
+    .llchip {
+      background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.28);
+      color: #7dd3fc; border-radius: 3px; padding: 1px 5px;
+      font-size: 0.62rem; font-family: monospace;
+      max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .llchip-gw { color: #94a3b8; background: rgba(148,163,184,0.1); border-color: rgba(148,163,184,0.25); }
+    .llconn { flex-shrink: 0; width: 9px; height: 1px; background: #334155; }
+    .llcount { flex-shrink: 0; color: #38bdf8; font-size: 0.6rem; font-weight: 700; margin-left: 5px; font-family: monospace; }
+    .legend-live-arrow { color: #334155; font-size: 0.6rem; line-height: 1; }
+    .live-detail-panel {
+      margin-top: 0.4rem; border-top: 1px solid #1e293b; padding-top: 0.4rem;
+    }
 
     /* Node name labels */
     .map-label {
-      background: rgba(15, 23, 42, 0.82) !important;
-      border: none !important;
-      box-shadow: none !important;
-      color: #e2e8f0 !important;
-      font-size: 0.72rem !important;
+      background: rgba(8, 12, 24, 0.92) !important;
+      border: 1px solid rgba(148,163,184,0.22) !important;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.6) !important;
+      color: #f1f5f9 !important;
+      font-size: 0.73rem !important;
       font-weight: 600 !important;
-      padding: 1px 5px !important;
-      border-radius: 3px !important;
+      padding: 2px 7px !important;
+      border-radius: 5px !important;
       white-space: nowrap !important;
       pointer-events: none !important;
+      letter-spacing: 0.01em !important;
     }
     .map-label::before { display: none !important; }
-    .map-label-advert { color: #c4b5fd !important; }
+    .map-label-advert { color: #c4b5fd !important; border-color: rgba(196,181,253,0.3) !important; }
+    /* Hide all node labels when the Labels toggle is off */
+    .labels-hidden .leaflet-tooltip { display: none !important; }
 
     /* Animated topology lines — dash flows toward the gateway.
        Large offset (100 repeats of 18px) so the loop reset happens every ~3 min
@@ -231,6 +332,50 @@
       flex-shrink: 0;
     }
     .map-neighbour-gw { color: #38bdf8; }
+    .map-live-paths-box {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 0.55rem 0.8rem;
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+    .nb-update-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0.2rem 0 0;
+    }
+    .rf-neighbor-bubble {
+      background: rgba(56,189,248,0.15);
+      border: 1px solid rgba(56,189,248,0.4);
+      color: #38bdf8;
+      border-radius: 999px;
+      padding: 0.15rem 0.7rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .rf-neighbor-bubble:hover { background: rgba(56,189,248,0.28); }
+    .rf-neighbor-bubble:disabled { opacity: 0.45; cursor: not-allowed; }
+    .nb-update-time {
+      font-size: 0.65rem;
+      color: #475569;
+    }
+    .nb-snr {
+      margin-left: auto;
+      font-size: 0.67rem;
+      font-weight: 700;
+      font-family: monospace;
+      flex-shrink: 0;
+    }
+    .nb-age {
+      padding: 0 0 0.15rem 1.1rem;
+      font-size: 0.64rem;
+      color: #475569;
+    }
 
   </style>
 </head>
@@ -242,12 +387,16 @@
     <div class="header-title">
       <h1>MeshCore Repeater Monitor</h1>
       <div class="subtitle">LoRa Mesh Network Dashboard</div>
+      <div class="header-meta">
+        <div class="header-conn-mini"><span class="status-dot unknown" id="miniConnDot"></span><span id="miniConnText">—</span></div>
+      </div>
     </div>
     <nav class="nav-group">
       <a href="/" class="nav-btn" title="Dashboard">Dashboard</a>
       <a href="/map" class="nav-btn nav-btn-active" title="Network Map">Map</a>
       <a href="/messages" class="nav-btn" title="Messages">Messages</a>
       <a href="/packets" class="nav-btn" title="Packets">Packets</a>
+      <a href="/contacts" class="nav-btn" title="Contacts">Contacts</a>
       <a href="/logs" class="nav-btn" title="Activity Logs">Logs</a>
       <a href="/settings" class="nav-btn nav-settings" title="Settings">&#9881;</a>
     </nav>
@@ -256,30 +405,62 @@
   <div class="map-body">
     <div id="leaflet-map"></div>
 
-    <!-- Legend -->
-    <div class="map-legend">
-      <div class="legend-row"><div class="legend-dot gateway"></div> Gateway</div>
-      <div class="legend-row" style="font-size:0.68rem;color:#64748b;margin:0.25rem 0 0.1rem;">Node fill = status</div>
-      <div class="legend-row"><div class="legend-dot online"></div> Online</div>
-      <div class="legend-row"><div class="legend-dot offline"></div> Offline</div>
-      <div class="legend-row"><div class="legend-dot unknown"></div> Not polled</div>
-      <div class="legend-row" style="font-size:0.68rem;color:#64748b;margin-top:0.25rem;">Contacts (All mode)</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#22d3ee"></div> Contact</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#7c3aed"></div> Advert</div>
-      <div class="legend-row" style="font-size:0.68rem;color:#64748b;margin-top:0.25rem;">Paths layer</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#34d399;border-radius:2px"></div> Single route</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#f59e0b;border-radius:2px"></div> Shared segment</div>
-      <div class="legend-row" style="font-size:0.68rem;color:#64748b;margin-top:0.25rem;">Msg paths layer</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#a78bfa;border-radius:2px"></div> Message path</div>
+    <!-- Left column: legend + live paths stacked -->
+    <div class="map-left-col">
+      <div class="map-legend">
+        <div class="legend-row"><div class="legend-dot gateway"></div> Gateway</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#f97316;border:2px solid #22c55e"></div> Repeater (known path)</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#3b82f6;border:2px solid #93c5fd"></div> Repeater (no path)</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#0c4a6e;border:2px solid #22d3ee"></div> No path (contact)</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#7c3aed;border:2px solid #a78bfa"></div> No path (advert)</div>
+        <div class="legend-row" style="font-size:0.68rem;color:#64748b;margin-top:0.25rem;">Paths layer</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#34d399;border-radius:2px"></div> Single route</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#f59e0b;border-radius:2px"></div> Shared segment</div>
+      </div>
+
+      <!-- Live RF Paths box — stacks below legend -->
+      <div class="map-live-paths-box" id="livePathsBox" style="display:none">
+        <div class="legend-live-header" style="margin-bottom:0.3rem">
+          <div class="legend-live-line-demo"></div>
+          &#9889; Live RF Paths
+        </div>
+        <div class="legend-live-paths" id="legendLivePaths"></div>
+        <div id="legendLiveDetail" class="live-detail-panel" style="display:none"></div>
+      </div>
     </div>
 
-    <!-- Top-right button bar -->
-    <div class="map-btn-bar">
-      <button class="map-sethome-btn" id="setHomeBtn" onclick="togglePickHome()">&#8962; Set Home</button>
-      <button class="map-contacts-btn" id="contactsBtn" onclick="toggleAllContacts()">&#9788; All Contacts</button>
-      <button class="map-paths-btn" id="pathsBtn" onclick="togglePaths()">&#8627; Paths</button>
-      <button class="map-paths-btn" id="msgPathsBtn" onclick="toggleMsgPaths()">&#9993; Msg Paths</button>
-      <button class="map-refresh-btn" onclick="loadMap()">Refresh</button>
+    <!-- Hamburger menu -->
+    <div class="map-menu-wrap" id="mapMenuWrap">
+      <button class="map-hamburger" id="mapHamburger" onclick="toggleMapMenu()">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="map-menu-dropdown" id="mapMenuDropdown">
+        <button class="map-menu-item" id="menuSetHome" onclick="togglePickHome()">
+          <span class="mmi-icon">&#8962;</span> Set Home
+        </button>
+        <button class="map-menu-item" id="menuContacts" onclick="toggleAllContacts()">
+          <span class="mmi-icon">&#9788;</span> All Contacts
+        </button>
+        <button class="map-menu-item" id="menuPaths" onclick="togglePaths()">
+          <span class="mmi-icon">&#8627;</span> Paths
+        </button>
+        <button class="map-menu-item active active-cyan" id="menuLive" onclick="toggleLivePaths()">
+          <span class="mmi-icon">&#9889;</span> Live RF Paths
+        </button>
+        <button class="map-menu-item" id="menuSatellite" onclick="toggleSatellite()">
+          <span class="mmi-icon">&#127759;</span> Satellite
+        </button>
+        <button class="map-menu-item active active-cyan" id="menuLabels" onclick="toggleLabels()">
+          <span class="mmi-icon">&#127991;</span> Labels
+        </button>
+        <div class="map-menu-separator"></div>
+        <button class="map-menu-item" onclick="loadMap(); closeMapMenu()">
+          <span class="mmi-icon">&#8635;</span> Refresh
+        </button>
+        <button class="map-menu-item" id="menuClearPaths" onclick="clearPaths(); closeMapMenu()">
+          <span class="mmi-icon">&#10006;</span> Clear Paths
+        </button>
+      </div>
     </div>
 
     <!-- No-GPS panel -->
@@ -291,12 +472,16 @@
     <!-- Neighbour highlight panel -->
     <div class="map-neighbour-panel" id="neighbourPanel" style="display:none">
       <div class="map-neighbour-header">
-        <span id="neighbourNodeName"></span>
+        <span id="neighbourNodeName">Neighbours</span>
         <button onclick="clearNeighbourSelection()" title="Close">&#x2715;</button>
       </div>
-      <div class="map-neighbour-subtitle">Direct RF Neighbours</div>
-      <div id="neighbourList"></div>
+      <div class="nb-update-row">
+        <button id="rfNeighborBtn" class="rf-neighbor-bubble" onclick="queryRfNeighbors()">Update</button>
+        <span id="rfNeighborTime" class="nb-update-time"></span>
+      </div>
+      <div id="neighbourList" style="margin-top:0.35rem"></div>
     </div>
+
   </div>
 </div>
 
@@ -306,11 +491,80 @@
   // Default view: New Zealand
   var map = L.map('leaflet-map', { zoomControl: true }).setView([-41.0, 174.0], 6);
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+  var _tileOpts = {
+    maxZoom: 19,
+    updateWhenIdle: true,
+    updateWhenZooming: false,
+    keepBuffer: 4
+  };
+  var _darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', Object.assign({}, _tileOpts, {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd',
-    maxZoom: 19
-  }).addTo(map);
+    subdomains: 'abcd'
+  }));
+  var _satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', Object.assign({}, _tileOpts, {
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+  }));
+  var _isSatellite = false;
+  _darkLayer.addTo(map);
+
+  function _setLinkAnimState(paused) {
+    Object.keys(_linkLines).forEach(function(key) {
+      (_linkLines[key] || []).forEach(function(line) {
+        var el = line._path || (line.getElement ? line.getElement() : null);
+        if (el) el.style.animationPlayState = paused ? 'paused' : 'running';
+      });
+    });
+  }
+
+  // --- Hamburger menu ---
+  function toggleMapMenu() {
+    var hamburger = document.getElementById('mapHamburger');
+    var dropdown  = document.getElementById('mapMenuDropdown');
+    var isOpen    = dropdown.classList.contains('open');
+    if (isOpen) {
+      dropdown.classList.remove('open');
+      hamburger.classList.remove('open');
+    } else {
+      dropdown.classList.add('open');
+      hamburger.classList.add('open');
+    }
+  }
+  function closeMapMenu() {
+    document.getElementById('mapMenuDropdown').classList.remove('open');
+    document.getElementById('mapHamburger').classList.remove('open');
+  }
+  document.addEventListener('click', function(e) {
+    var wrap = document.getElementById('mapMenuWrap');
+    if (wrap && !wrap.contains(e.target)) closeMapMenu();
+  });
+
+  function toggleSatellite() {
+    _isSatellite = !_isSatellite;
+    var btn = document.getElementById('menuSatellite');
+    if (_isSatellite) {
+      map.removeLayer(_darkLayer);
+      _satelliteLayer.addTo(map);
+      btn.classList.add('active', 'active-yellow');
+    } else {
+      map.removeLayer(_satelliteLayer);
+      _darkLayer.addTo(map);
+      btn.classList.remove('active', 'active-yellow');
+    }
+  }
+
+  var _labelsOn = true;
+  function toggleLabels() {
+    _labelsOn = !_labelsOn;
+    var btn = document.getElementById('menuLabels');
+    var mapEl = document.getElementById('leaflet-map');
+    if (_labelsOn) {
+      btn.classList.add('active', 'active-cyan');
+      mapEl.classList.remove('labels-hidden');
+    } else {
+      btn.classList.remove('active', 'active-cyan');
+      mapEl.classList.add('labels-hidden');
+    }
+  }
 
   // Ensure Leaflet recalculates the map size after the page fully renders
   setTimeout(function() { map.invalidateSize(); }, 100);
@@ -333,10 +587,8 @@
   var _contactsLayer = L.layerGroup().addTo(map);  // layer for "show all contacts" mode
   var _advertLayer = L.layerGroup().addTo(map);    // always-on layer for advert-discovered nodes
   var _pathsLayer = L.layerGroup().addTo(map);     // layer for "show all paths" toggle
-  var _msgPathsLayer = L.layerGroup().addTo(map);  // layer for message paths toggle
   var _showingAllContacts = false;    // toggle state
   var _showingPaths = false;          // paths toggle state
-  var _showingMsgPaths = false;       // message paths toggle state
   var _highlightedRepeater = null;    // pubkey of repeater whose path is isolated (null = show all)
   var _pathsStateBeforeHighlight = false; // saved _showingPaths before a repeater was clicked
   var _allContactsData = [];          // latest contacts array from /api/map
@@ -443,22 +695,34 @@
 
     function buildChain(pubkey, route_path, hops) {
       var chain = [homePk];
+      var resolvedIntermediates = 0;
       if (route_path) {
-        var segs = route_path.replace(/\s/g, '').split('>');
+        var segs = route_path.replace(/\s/g, '').split('>').filter(Boolean);
         segs.forEach(function(seg) {
           var segLower = seg.toLowerCase();
-          var intermediate = _pubkeyMap[segLower];
+          // Try 6-char, 4-char, 2-char prefix lookups
+          var intermediate = _pubkeyMap[segLower] ||
+                             _pubkeyMap[segLower.substring(0, 4)] ||
+                             _pubkeyMap[segLower.substring(0, 2)];
           if (intermediate && intermediate.pubkey !== pubkey) {
             chain.push(intermediate.pubkey);
+            resolvedIntermediates++;
           } else if (!intermediate) {
             var unk = _contactMap[segLower];
             if (unk && unk.pubkey && unk.pubkey !== pubkey) {
               chain.push(unk.pubkey);
+              resolvedIntermediates++;
             }
           }
         });
       }
       chain.push(pubkey);
+      // Only draw edges if:
+      // - node is direct (hops === 0) → chain is [home, node], draw direct edge
+      // - node has intermediates that resolved → draw the chain
+      // - node has route_path but none resolved → skip (don't fake a direct edge)
+      var effectiveHops = (hops === 0 && route_path && route_path.trim()) ? 1 : hops;
+      if (chain.length === 2 && effectiveHops > 0) return; // hops > 0 but no intermediates resolved — skip
       for (var i = 0; i < chain.length - 1; i++) {
         addEdge(chain[i], chain[i + 1]);
       }
@@ -496,6 +760,7 @@
     repeaters.forEach(function(r, idx) {
       if (r.pubkey && r.pubkey.length >= 2) _pubkeyMap[r.pubkey.substring(0, 2).toLowerCase()] = r;
       if (r.pubkey && r.pubkey.length >= 4) _pubkeyMap[r.pubkey.substring(0, 4).toLowerCase()] = r;
+      if (r.pubkey && r.pubkey.length >= 6) _pubkeyMap[r.pubkey.substring(0, 6).toLowerCase()] = r;
       // Assign a stable unique colour from the palette (persists across refreshes)
       if (!_nodeColors[r.pubkey]) {
         _nodeColors[r.pubkey] = NODE_PALETTE[idx % NODE_PALETTE.length];
@@ -530,7 +795,6 @@
 
     // Refresh paths layers if currently on
     if (_showingPaths) renderPathsLayer();
-    if (_showingMsgPaths) renderMsgPathsLayer();
 
     // --- Home/gateway marker ---
     if (home.lat && home.lon) {
@@ -573,18 +837,20 @@
       seenKeys[r.pubkey] = true;
       var latlng = [r.lat, r.lon];
       bounds.push(latlng);
-      var statusColor = markerColor(r);
-      var ringColor = _nodeColors[r.pubkey] || '#94a3b8';
+      var hasPath = !!r.route_path;
+      var fillColor = hasPath ? '#f97316' : '#3b82f6';
+      var ringColor = hasPath ? '#22c55e' : '#93c5fd';
+      var ringWeight = hasPath ? 3 : 2;
 
       if (_markers[r.pubkey]) {
         _markers[r.pubkey].setLatLng(latlng);
-        _markers[r.pubkey].setStyle({ fillColor: statusColor, color: ringColor, weight: 3 });
+        _markers[r.pubkey].setStyle({ fillColor: fillColor, color: ringColor, weight: ringWeight });
       } else {
         _markers[r.pubkey] = L.circleMarker(latlng, {
           radius: 9,
-          fillColor: statusColor,
+          fillColor: fillColor,
           color: ringColor,
-          weight: 3,
+          weight: ringWeight,
           opacity: 1,
           fillOpacity: 0.9
         }).addTo(map)
@@ -597,19 +863,6 @@
               } else {
                 _selectedPubkey = pk;
                 applyNeighbourHighlight(pk);
-              }
-              // Highlight just this repeater's path(s)
-              if (_highlightedRepeater === pk) {
-                // Same repeater clicked again — restore previous state
-                _clearPathHighlight();
-              } else {
-                _pathsStateBeforeHighlight = _showingPaths;
-                _highlightedRepeater = pk;
-                if (!_showingPaths) {
-                  _showingPaths = true;
-                  document.getElementById('pathsBtn').classList.add('active');
-                }
-                renderPathsLayer();
               }
             };
           })(r.pubkey));
@@ -645,13 +898,20 @@
       if (r.route_path && r.hops > 0) {
         var segments = r.route_path.replace(/\s/g, '').split('>');
         segments.forEach(function(seg) {
-          var intermediate = _pubkeyMap[seg.toLowerCase()];
+          var segLower = seg.toLowerCase();
+          var intermediate = _pubkeyMap[segLower] ||
+                             _pubkeyMap[segLower.substring(0, 4)] ||
+                             _pubkeyMap[segLower.substring(0, 2)];
           if (intermediate && intermediate.pubkey !== r.pubkey) {
             chain.push(intermediate.pubkey);
           }
         });
       }
       chain.push(r.pubkey);
+
+      // If this node is multi-hop but no intermediate GPS nodes resolved,
+      // skip the line entirely — a direct home→repeater line would be misleading.
+      if (chain.length === 2 && r.hops > 0) return;
 
       for (var i = 0; i < chain.length - 1; i++) {
         var a = chain[i], b = chain[i + 1];
@@ -730,7 +990,21 @@
     // Auto-fit only on the very first load (before any markers existed)
     if (bounds.length > 0 && !_didInitialFit) {
       _didInitialFit = true;
-      try { map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 }); } catch(e) {}
+      // If arriving from Contacts with a specific location, fly there instead
+      var _urlParams = new URLSearchParams(window.location.search);
+      var _flyLat = parseFloat(_urlParams.get('lat'));
+      var _flyLon = parseFloat(_urlParams.get('lon'));
+      var _flyName = _urlParams.get('name') || '';
+      if (!isNaN(_flyLat) && !isNaN(_flyLon)) {
+        map.setView([_flyLat, _flyLon], 14);
+        L.popup({ closeButton: true, className: 'map-label' })
+          .setLatLng([_flyLat, _flyLon])
+          .setContent('<strong>' + (_flyName || 'Contact') + '</strong><br>' +
+            _flyLat.toFixed(5) + ', ' + _flyLon.toFixed(5))
+          .openOn(map);
+      } else {
+        try { map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 }); } catch(e) {}
+      }
     }
 
     // Re-apply neighbour highlight if a node is selected (persists across refreshes)
@@ -747,6 +1021,132 @@
     // Return a slightly darker shade for marker border
     var map = { '#4ade80': '#16a34a', '#f87171': '#dc2626', '#64748b': '#334155', '#38bdf8': '#0284c7' };
     return map[hex] || hex;
+  }
+
+  // --- RF Neighbor query (live 'neighbors' CLI command) ---
+
+  function _findNodeByPrefix(prefix8) {
+    var p = prefix8.toUpperCase();
+    var pks = Object.keys(_markers);
+    for (var i = 0; i < pks.length; i++) {
+      if (pks[i].toUpperCase().startsWith(p)) {
+        return { latlng: _markers[pks[i]].getLatLng(), name: _nodeNameMap[pks[i]] || pks[i].substring(0, 8) };
+      }
+    }
+    var apks = Object.keys(_advertMarkers);
+    for (var i = 0; i < apks.length; i++) {
+      if (apks[i].toUpperCase().startsWith(p)) {
+        var am = _advertMarkers[apks[i]];
+        return { latlng: am.getLatLng ? am.getLatLng() : null, name: _nodeNameMap[apks[i]] || apks[i].substring(0, 8) };
+      }
+    }
+    var c = _contactMap[p.substring(0, 4).toLowerCase()] || _contactMap[p.substring(0, 2).toLowerCase()];
+    if (c && c.pubkey && c.pubkey.toUpperCase().startsWith(p)) {
+      return { latlng: (c.lat && c.lon) ? [c.lat, c.lon] : null, name: c.name || c.pubkey.substring(0, 8) };
+    }
+    return { latlng: null, name: prefix8 };
+  }
+
+  function _snrColor(snr) {
+    if (snr >= 5)  return '#22c55e';
+    if (snr >= 0)  return '#eab308';
+    if (snr >= -5) return '#f97316';
+    return '#ef4444';
+  }
+
+  function _fmtAge(seconds) {
+    if (seconds < 60)    return seconds + 's ago';
+    if (seconds < 3600)  return Math.floor(seconds / 60) + 'm ago';
+    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+    return Math.floor(seconds / 86400) + 'd ago';
+  }
+
+  function _renderRfNeighborList(neighbors, pubkey) {
+    var listEl = document.getElementById('neighbourList');
+    if (!listEl) return;
+
+    _neighbourLayer.clearLayers();
+    var srcLatLng = _markers[pubkey] ? _markers[pubkey].getLatLng() : null;
+
+    if (srcLatLng) {
+      L.circleMarker(srcLatLng, {
+        radius: 16, color: '#ffffff', weight: 3,
+        fillOpacity: 0, opacity: 0.9, interactive: false
+      }).addTo(_neighbourLayer);
+    }
+
+    if (!neighbors || neighbors.length === 0) {
+      listEl.innerHTML = '<div style="color:#64748b;font-style:italic;font-size:0.75rem">No neighbors reported</div>';
+      return;
+    }
+
+    var sorted = neighbors.slice().sort(function(a, b) { return b.snr_db - a.snr_db; });
+    var html = '';
+    sorted.forEach(function(nb) {
+      var col    = _snrColor(nb.snr_db);
+      var node   = _findNodeByPrefix(nb.pubkey);
+      var name   = node.name;
+      var age    = _fmtAge(nb.seconds_ago);
+      var snrStr = nb.snr_db.toFixed(1) + ' dB';
+
+      if (srcLatLng && node.latlng) {
+        L.polyline([srcLatLng, node.latlng], {
+          color: col, weight: 3, opacity: 0.85, interactive: false
+        }).bindTooltip(name + ' • ' + snrStr + ' • ' + age, { sticky: true })
+          .addTo(_neighbourLayer);
+        L.circleMarker(node.latlng, {
+          radius: 13, color: col, weight: 2.5,
+          fillColor: col, fillOpacity: 0.12,
+          opacity: 0.85, interactive: false
+        }).addTo(_neighbourLayer);
+      }
+
+      html += '<div class="map-neighbour-item">' +
+        '<span class="map-neighbour-dot" style="background:' + col + '"></span>' +
+        '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + name + '</span>' +
+        '<span class="nb-snr" style="color:' + col + '">' + snrStr + '</span>' +
+        '</div>' +
+        '<div class="nb-age">' + nb.pubkey + ' • ' + age + '</div>';
+    });
+    listEl.innerHTML = html;
+  }
+
+  function _setRfTime(ts) {
+    var el = document.getElementById('rfNeighborTime');
+    if (!el) return;
+    if (!ts) { el.textContent = ''; return; }
+    el.textContent = 'Updated ' + new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function queryRfNeighbors() {
+    var pubkey = _selectedPubkey;
+    if (!pubkey) return;
+    var btn    = document.getElementById('rfNeighborBtn');
+    var listEl = document.getElementById('neighbourList');
+    if (btn)    { btn.disabled = true; btn.textContent = 'Updating…'; }
+    _setRfTime(null);
+    if (listEl) listEl.innerHTML = '<div style="color:#64748b;font-style:italic;font-size:0.75rem">Connecting to node…</div>';
+
+    fetch('/api/neighbors/' + encodeURIComponent(pubkey), { method: 'POST' })
+      .then(function(r) { return r.json(); })
+      .then(function(result) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Update'; }
+        if (!result.ok) {
+          if (listEl) listEl.innerHTML = '<div style="color:#ef4444;font-size:0.75rem">' + (result.error || 'Query failed') + '</div>';
+          return;
+        }
+        var now = Date.now();
+        if (!window._rfNeighborCache) window._rfNeighborCache = {};
+        var entry = { neighbors: result.neighbors || [], updatedAt: now };
+        window._rfNeighborCache[pubkey] = entry;
+        try { localStorage.setItem('meshcore_rf_neighbors_' + pubkey, JSON.stringify(entry)); } catch(e) {}
+        _setRfTime(now);
+        _renderRfNeighborList(result.neighbors || [], pubkey);
+      })
+      .catch(function() {
+        if (btn) { btn.disabled = false; btn.textContent = 'Update'; }
+        if (listEl) listEl.innerHTML = '<div style="color:#ef4444;font-size:0.75rem">Request failed</div>';
+      });
   }
 
   // --- Neighbour highlight helpers ---
@@ -834,7 +1234,29 @@
     var listEl = document.getElementById('neighbourList');
     if (!panel) return;
 
-    nameEl.textContent = _nodeNameMap[pubkey] || pubkey.substring(0, 8);
+    nameEl.textContent = (_nodeNameMap[pubkey] || pubkey.substring(0, 8)) + ' Neighbours';
+    var rfBtn = document.getElementById('rfNeighborBtn');
+    if (rfBtn) { rfBtn.disabled = false; rfBtn.textContent = 'Update'; }
+
+    // Show cached RF result if we have one for this node (memory or localStorage)
+    var cached = window._rfNeighborCache && window._rfNeighborCache[pubkey];
+    if (!cached) {
+      try {
+        var stored = localStorage.getItem('meshcore_rf_neighbors_' + pubkey);
+        if (stored) {
+          cached = JSON.parse(stored);
+          if (!window._rfNeighborCache) window._rfNeighborCache = {};
+          window._rfNeighborCache[pubkey] = cached;
+        }
+      } catch(e) {}
+    }
+    if (cached) {
+      _setRfTime(cached.updatedAt);
+      _renderRfNeighborList(cached.neighbors, pubkey);
+      panel.style.display = 'block';
+      return;
+    }
+    _setRfTime(null);
 
     if (neighbours.length === 0) {
       listEl.innerHTML = '<div style="color:#64748b;font-style:italic">No neighbours found</div>';
@@ -884,21 +1306,30 @@
         + '<div style="color:#64748b;font-size:0.78rem">Advert-discovered' + (ageTxt ? ' \u2022 ' + ageTxt : '') + '</div>'
         + '<div style="color:#94a3b8;font-size:0.7rem;margin-top:0.2rem;font-family:monospace">' + n.pubkey.slice(0, 16) + '\u2026</div>';
 
+      // Use cyan/teal if a known path exists for this node, otherwise purple
+      var pre2 = n.pubkey.substring(0, 2).toLowerCase();
+      var advertHasPath = _allContactsData.some(function(c) {
+        return c.route_path && c.pubkey && c.pubkey.substring(0, 2).toLowerCase() === pre2;
+      });
+      var advertFill = advertHasPath ? '#0891b2' : '#7c3aed';
+      var advertRing = advertHasPath ? '#34d399' : '#a78bfa';
+
       if (_advertMarkers[n.pubkey]) {
         _advertMarkers[n.pubkey].setLatLng(latlng);
+        _advertMarkers[n.pubkey].setStyle({ fillColor: advertFill, color: advertRing });
         _advertMarkers[n.pubkey].getPopup().setContent(popupHtml);
       } else {
         var m = L.circleMarker(latlng, {
           radius: 7,
-          fillColor: '#7c3aed',
-          color: '#a78bfa',
+          fillColor: advertFill,
+          color: advertRing,
           weight: 2,
           opacity: 0.9,
           fillOpacity: 0.75,
           dashArray: '4, 3'
         }).addTo(_advertLayer)
           .bindPopup(popupHtml)
-          .bindTooltip(n.name + ' \u2605', { permanent: true, direction: 'top', className: 'map-label map-label-advert', offset: [0, -10] })
+          .bindTooltip(n.name, { permanent: true, direction: 'top', className: 'map-label map-label-advert', offset: [0, -10] })
           .on('click', (function(pk) {
             return function(e) {
               L.DomEvent.stopPropagation(e);
@@ -909,7 +1340,7 @@
                 _highlightedRepeater = pk;
                 if (!_showingPaths) {
                   _showingPaths = true;
-                  document.getElementById('pathsBtn').classList.add('active');
+                  document.getElementById('menuPaths').classList.add('active', 'active-green');
                 }
                 renderPathsLayer();
               }
@@ -939,9 +1370,10 @@
       var prefix2 = c.pubkey ? c.pubkey.substring(0, 2).toUpperCase() : '';
       var isKnown = !!(prefix2 && _mapNodeNames[prefix2]);
 
-      // All contacts use the same cyan — keeps them visually distinct from configured repeaters
-      var ringColor  = '#22d3ee';
-      var fillColor  = '#0c4a6e';
+      // Cyan/teal if known path, otherwise standard contact cyan
+      var hasPath = !!c.route_path;
+      var ringColor  = hasPath ? '#34d399' : '#22d3ee';
+      var fillColor  = hasPath ? '#0891b2' : '#0c4a6e';
       var dashArray  = '2, 2';
 
       // Build popup content
@@ -960,7 +1392,7 @@
         + '<div class="popup-row"><span class="popup-label">Hops</span><span class="popup-val">' + hopsStr + '</span></div>'
         + (routeStr ? '<div class="popup-row"><span class="popup-label">Path</span><span class="popup-val" style="font-size:0.78rem;font-family:monospace">' + routeStr + '</span></div>' : '')
         + '<div class="popup-row"><span class="popup-label">ID</span><span class="popup-val" style="font-family:monospace;font-size:0.72rem">' + c.pubkey.substring(0, 12) + '…</span></div>'
-        + (isKnown ? '<div style="color:#22d3ee;font-size:0.7rem;margin-top:0.2rem">★ Known node</div>' : '')
+        + (isKnown ? '<div style="color:#22d3ee;font-size:0.7rem;margin-top:0.2rem">Known node</div>' : '')
         + (linked ? '<div style="color:#f59e0b;font-size:0.7rem;margin-top:0.2rem">⬡ Linked to your mesh</div>' : '');
 
       var cm = L.circleMarker(latlng, {
@@ -982,7 +1414,7 @@
               _highlightedRepeater = pk;
               if (!_showingPaths) {
                 _showingPaths = true;
-                document.getElementById('pathsBtn').classList.add('active');
+                document.getElementById('menuPaths').classList.add('active', 'active-green');
               }
               renderPathsLayer();
             }
@@ -1038,11 +1470,20 @@
     });
   }
 
+  function _setTopologyOpacity(dimmed) {
+    Object.keys(_linkLines).forEach(function(key) {
+      (_linkLines[key] || []).forEach(function(line) {
+        line.setStyle({ opacity: dimmed ? 0.15 : 0.7 });
+      });
+    });
+  }
+
   function _clearPathHighlight() {
     _highlightedRepeater = null;
+    _setTopologyOpacity(false);
     var wasOn = _pathsStateBeforeHighlight;
     _showingPaths = wasOn;
-    var btn = document.getElementById('pathsBtn');
+    var btn = document.getElementById('menuPaths');
     if (wasOn) {
       btn.classList.add('active');
       renderPathsLayer();
@@ -1052,15 +1493,38 @@
     }
   }
 
+  function clearPaths() {
+    var btn = document.getElementById('menuClearPaths');
+    btn.disabled = true;
+    btn.textContent = 'Clearing…';
+    fetch('/api/contact-routes/reset', { method: 'POST' })
+      .then(function(r) { return r.json(); })
+      .then(function() {
+        btn.textContent = 'Cleared ✓';
+        // Reload map data so Source 1 (repeater route_path) also clears
+        loadMap();
+        // Clear path layer immediately
+        _pathsLayer.clearLayers();
+        setTimeout(function() {
+          btn.textContent = 'Clear Paths';
+          btn.disabled = false;
+        }, 3000);
+      }).catch(function() {
+        btn.textContent = 'Failed';
+        btn.disabled = false;
+        setTimeout(function() { btn.textContent = 'Clear Paths'; }, 2000);
+      });
+  }
+
   function togglePaths() {
-    _highlightedRepeater = null;  // clear any highlight when manually toggling
+    _highlightedRepeater = null;
     _showingPaths = !_showingPaths;
-    var btn = document.getElementById('pathsBtn');
+    var btn = document.getElementById('menuPaths');
     if (_showingPaths) {
-      btn.classList.add('active');
+      btn.classList.add('active', 'active-green');
       renderPathsLayer();
     } else {
-      btn.classList.remove('active');
+      btn.classList.remove('active', 'active-green');
       _pathsLayer.clearLayers();
     }
   }
@@ -1127,10 +1591,11 @@
         if (_lastMapData) {
           (_lastMapData.repeaters || []).forEach(function(r) {
             if (!r.lat || !r.lon) return;
+            // Only draw if the path is explicitly known
+            if (!r.route_path) return;
             var rHops = r.hops >= 0 ? r.hops : 0;
-            // Multi-hop with no path info — don't draw a misleading straight line
-            if (rHops > 0 && !r.route_path) return;
-            if (filterPk && !_pathInvolvesRepeater(r.pubkey, r.route_path || '', filterPk)) return;
+            // When a repeater is selected, only show ITS OWN path (it is the destination)
+            if (filterPk && r.pubkey.substring(0, 2).toLowerCase() !== filterPk.substring(0, 2).toLowerCase()) return;
             var latlngs = [];
             if (homeNode) latlngs.push([homeNode.lat, homeNode.lon]);
             if (r.route_path) {
@@ -1157,23 +1622,24 @@
           if (myPrefixes[pre2]) return;
           var dest = _allNodeLatLng[preN] || _allNodeLatLng[pre2];
           if (!dest) return;
-          if (filterPk && !_pathInvolvesRepeater(prefix, entry.path || '', filterPk)) return;
+          // When a repeater is selected, only show its own path (it is the destination)
+          if (filterPk && pre2 !== filterPk.substring(0, 2).toLowerCase()) return;
 
           var latlngs = [];
           if (homeNode) latlngs.push([homeNode.lat, homeNode.lon]);
 
           var pathStr = entry.path || '';
-          if (pathStr) {
-            pathStr.replace(/\s/g, '').split('>').forEach(function(seg) {
-              var node = _allNodeLatLng[seg.substring(0, _nodeIdChars).toLowerCase()] || _allNodeLatLng[seg.substring(0, 2).toLowerCase()];
-              if (node) latlngs.push([node.lat, node.lon]);
-            });
-          }
+          // Only draw contacts with a known explicit path
+          if (!pathStr) return;
+          pathStr.replace(/\s/g, '').split('>').forEach(function(seg) {
+            var node = _allNodeLatLng[seg.substring(0, _nodeIdChars).toLowerCase()] || _allNodeLatLng[seg.substring(0, 2).toLowerCase()];
+            if (node) latlngs.push([node.lat, node.lon]);
+          });
           latlngs.push([dest.lat, dest.lon]);
           var hops = entry.hops >= 0 ? entry.hops : 0;
-          // Multi-hop but no intermediates resolved — skip rather than draw straight line
-          if (hops > 0 && latlngs.length < 3) return;
           if (latlngs.length < 2) return;
+          // Multi-hop but intermediates not on map — skip rather than draw a misleading direct line
+          if (hops > 0 && latlngs.length < 3) return;
 
           var nodeName = dest.name || prefix.substring(0, 2).toUpperCase();
           var label = nodeName + ' (' + hops + ' hop' + (hops !== 1 ? 's' : '') + ')';
@@ -1201,74 +1667,14 @@
       .catch(function() {});
   }
 
-  function toggleMsgPaths() {
-    _showingMsgPaths = !_showingMsgPaths;
-    var btn = document.getElementById('msgPathsBtn');
-    if (_showingMsgPaths) {
-      btn.classList.add('active');
-      renderMsgPathsLayer();
-    } else {
-      btn.classList.remove('active');
-      _msgPathsLayer.clearLayers();
-    }
-  }
-
-  function renderMsgPathsLayer() {
-    _msgPathsLayer.clearLayers();
-    fetch('/api/message-paths')
-      .then(function(r) { return r.json(); })
-      .then(function(msgs) {
-        var homeNode = _allNodeLatLng['__home__'];
-        var segCounts = {};
-        var segLatLng = {};
-        var segLabels = {};
-
-        msgs.forEach(function(m) {
-          var pre2 = (m.sender_pubkey || '').substring(0, 2).toLowerCase();
-          var preN = (m.sender_pubkey || '').substring(0, _nodeIdChars).toLowerCase();
-          var sender = _allNodeLatLng[preN] || _allNodeLatLng[pre2];
-          if (!sender) return;
-
-          var latlngs = [[sender.lat, sender.lon]];
-          if (m.path) {
-            m.path.replace(/\s/g, '').split('>').forEach(function(seg) {
-              var node = _allNodeLatLng[seg.substring(0, _nodeIdChars).toLowerCase()] || _allNodeLatLng[seg.substring(0, 2).toLowerCase()];
-              if (node) latlngs.push([node.lat, node.lon]);
-            });
-          }
-          if (homeNode) latlngs.push([homeNode.lat, homeNode.lon]);
-          if (latlngs.length < 2) return;
-
-          var hops = m.hops >= 0 ? m.hops : '?';
-          var label = (m.sender_name || pre2) + ' (' + hops + (hops !== '?' ? ' hop' + (hops !== 1 ? 's' : '') : '') + ')';
-          _addPathToSegments(latlngs, label, segCounts, segLatLng, segLabels);
-        });
-
-        Object.keys(segCounts).forEach(function(key) {
-          var count = segCounts[key];
-          var tip = segLabels[key].join(', ');
-          var line = L.polyline(segLatLng[key], {
-            color: '#a78bfa',
-            weight: 2,
-            opacity: 0.75,
-            dashArray: count > 1 ? null : '6 4'
-          });
-          line.bindTooltip(count + ' message' + (count !== 1 ? 's' : '') + ': ' + tip,
-            { sticky: true, className: 'map-label' });
-          _msgPathsLayer.addLayer(line);
-        });
-      })
-      .catch(function() {});
-  }
-
   function toggleAllContacts() {
     _showingAllContacts = !_showingAllContacts;
-    var btn = document.getElementById('contactsBtn');
+    var btn = document.getElementById('menuContacts');
     if (_showingAllContacts) {
-      btn.classList.add('active');
+      btn.classList.add('active', 'active-purple');
       renderContactsLayer();
     } else {
-      btn.classList.remove('active');
+      btn.classList.remove('active', 'active-purple');
       _contactsLayer.clearLayers();
     }
   }
@@ -1278,15 +1684,16 @@
 
   function togglePickHome() {
     _pickingHome = !_pickingHome;
-    var btn = document.getElementById('setHomeBtn');
+    var btn = document.getElementById('menuSetHome');
     var mapEl = document.getElementById('leaflet-map');
     if (_pickingHome) {
-      btn.classList.add('picking');
-      btn.textContent = '\u2715 Cancel';
+      btn.classList.add('active', 'active-amber');
+      btn.innerHTML = '<span class="mmi-icon">&#10006;</span> Cancel';
       mapEl.classList.add('map-picking');
+      closeMapMenu();
     } else {
-      btn.classList.remove('picking');
-      btn.textContent = '\u8962 Set Home';
+      btn.classList.remove('active', 'active-amber');
+      btn.innerHTML = '<span class="mmi-icon">&#8962;</span> Set Home';
       mapEl.classList.remove('map-picking');
     }
   }
@@ -1308,9 +1715,9 @@
       .then(function(result) {
         if (result.ok) {
           _pickingHome = false;
-          var btn = document.getElementById('setHomeBtn');
-          btn.classList.remove('picking');
-          btn.textContent = '\u8962 Set Home';
+          var btn = document.getElementById('menuSetHome');
+          btn.classList.remove('active', 'active-amber');
+          btn.innerHTML = '<span class="mmi-icon">&#8962;</span> Set Home';
           document.getElementById('leaflet-map').classList.remove('map-picking');
           loadMap();
         }
@@ -1333,6 +1740,315 @@
 
   setInterval(loadMap, 10000);
   setInterval(loadNodeNames, 30000);
+
+  // --- Live path lines ---
+  var _livePathLines  = [];   // {polyline, addedAt, srcKey, hopCount, srcName, pathHops, detailHtml, pinned}
+  var _retiredGroups  = {};   // srcKey → {hopCount, srcName, pathHops, detailHtml, retiredAt}
+  var _pinnedLine     = null;
+  var _seenLiveIds    = new Set();
+  var _livePathsOn    = true;
+  var LINE_FULL_S     = 5;
+  var LINE_FADE_S     = 3;
+  var LINE_TOTAL_S    = LINE_FULL_S + LINE_FADE_S;
+  var LEGEND_EXTRA_S  = 3;
+  var _lastLegendSig  = '';   // JSON sig of groups — only rebuild DOM on change
+  var _hoveredSrcKey  = null; // srcKey currently under mouse in legend
+
+  function _showLiveDetail(html) {
+    var d = document.getElementById('legendLiveDetail');
+    d.innerHTML = html;
+    d.style.display = '';
+  }
+  function _hideLiveDetail() {
+    document.getElementById('legendLiveDetail').style.display = 'none';
+  }
+  function _unpinLine() {
+    if (_pinnedLine) {
+      _pinnedLine.pinned = false;
+      _pinnedLine.polyline.setStyle({ weight: 2.5, color: '#38bdf8', opacity: 0.9 });
+      _pinnedLine = null;
+    }
+    _hideLiveDetail();
+  }
+
+  // Map click anywhere → unpin
+  map.on('click', function() { _unpinLine(); });
+
+  function toggleLivePaths() {
+    _livePathsOn = !_livePathsOn;
+    var liveBtn = document.getElementById('menuLive');
+    liveBtn.classList.toggle('active', _livePathsOn);
+    liveBtn.classList.toggle('active-cyan', _livePathsOn);
+    document.getElementById('livePathsBox').style.display = _livePathsOn ? '' : 'none';
+    if (!_livePathsOn) {
+      _unpinLine();
+      _livePathLines.forEach(function(lp) { map.removeLayer(lp.polyline); });
+      _livePathLines = [];
+      _retiredGroups = {};
+      document.getElementById('legendLivePaths').innerHTML = '';
+    }
+  }
+
+  function _resolveHop(id) {
+    var p2 = id.substring(0, 2).toLowerCase();
+    var p4 = id.substring(0, 4).toLowerCase();
+    var p8 = id.substring(0, 8).toLowerCase();
+    return _allNodeLatLng[p8] || _allNodeLatLng[p4] || _allNodeLatLng[p2] || null;
+  }
+
+  // Legend row click → show detail panel AND pin the matching line on map
+  var _legendBox = document.getElementById('legendLivePaths');
+  _legendBox.addEventListener('click', function(e) {
+    var item = e.target;
+    while (item && !item.classList.contains('legend-live-item')) item = item.parentElement;
+    if (!item) return;
+    var srcKey = item.getAttribute('data-srckey');
+    if (!srcKey) return;
+    var match = null;
+    for (var i = _livePathLines.length - 1; i >= 0; i--) {
+      if (_livePathLines[i].srcKey === srcKey) { match = _livePathLines[i]; break; }
+    }
+    if (match) {
+      _showLiveDetail(match.detailHtml);
+      if (_pinnedLine && _pinnedLine !== match) _unpinLine();
+      if (!match.pinned) {
+        match.pinned = true;
+        _pinnedLine = match;
+        match.polyline.setStyle({ weight: 4.5, color: '#7dd3fc', opacity: 1 });
+      }
+    } else if (_retiredGroups[srcKey]) {
+      _showLiveDetail(_retiredGroups[srcKey].detailHtml);
+    }
+    _lastLegendSig = '';  // force legend refresh to update llitem-active
+  });
+
+  // Legend hover → highlight matching line without opening detail panel
+  _legendBox.addEventListener('mouseover', function(e) {
+    var item = e.target;
+    while (item && !item.classList.contains('legend-live-item')) item = item.parentElement;
+    if (!item) return;
+    var srcKey = item.getAttribute('data-srckey');
+    if (!srcKey || srcKey === _hoveredSrcKey) return;
+    _hoveredSrcKey = srcKey;
+    _livePathLines.forEach(function(lp) {
+      if (lp.srcKey === srcKey && !lp.pinned) {
+        lp.polyline.setStyle({ weight: 4, color: '#7dd3fc', opacity: 0.95 });
+      }
+    });
+  });
+
+  _legendBox.addEventListener('mouseout', function(e) {
+    if (!_hoveredSrcKey) return;
+    // Only clear hover when mouse leaves the legend item entirely (not when moving between children)
+    var rel = e.relatedTarget;
+    if (rel) {
+      var relItem = rel;
+      while (relItem && !relItem.classList.contains('legend-live-item')) relItem = relItem.parentElement;
+      if (relItem && relItem.getAttribute('data-srckey') === _hoveredSrcKey) return;
+    }
+    var prevKey = _hoveredSrcKey;
+    _hoveredSrcKey = null;
+    _livePathLines.forEach(function(lp) {
+      if (lp.srcKey === prevKey && !lp.pinned) {
+        lp.polyline.setStyle({ weight: 3, color: '#38bdf8', opacity: 0.9 });
+      }
+    });
+  });
+
+  function _buildDetailHtml(pathHops, hopCount, pkt_type, rssi, snr) {
+    var cs = 'padding:2px 6px;border-radius:4px;font-size:0.7rem;font-family:monospace;white-space:nowrap;display:inline-block';
+    var chips = pathHops.map(function(n) {
+      return '<span style="background:#1e3a5f;color:#38bdf8;' + cs + '">' + n + '</span>';
+    });
+    chips.push('<span style="background:#1e293b;color:#94a3b8;' + cs + '">Gateway</span>');
+    var conn = '<span style="display:inline-block;width:10px;height:1px;background:#334155;vertical-align:middle;margin:0 1px"></span>';
+    var pathBox = '<div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:6px;'
+      + 'padding:5px 8px;display:flex;flex-wrap:wrap;align-items:center;gap:1px;margin-bottom:5px">'
+      + chips.join(conn) + '</div>';
+    var parts = [];
+    parts.push('<b style="color:#e2e8f0">' + hopCount + ' Hop' + (hopCount !== 1 ? 's' : '') + '</b>');
+    if (pkt_type) parts.push('<b style="color:#7dd3fc">' + pkt_type + '</b>');
+    if (rssi != null) parts.push('<span>' + rssi + ' dBm</span>');
+    if (snr  != null) parts.push('<span>SNR ' + snr + '</span>');
+    return '<div style="font-size:0.74rem">'
+      + '<div style="color:#38bdf8;font-weight:600;margin-bottom:4px;font-size:0.75rem">⚡ Live RF Path</div>'
+      + pathBox
+      + '<div style="color:#94a3b8;display:flex;flex-wrap:wrap;gap:2px 8px">' + parts.join('') + '</div>'
+      + '</div>';
+  }
+
+  function tickLivePaths() {
+    var now = Date.now() / 1000;
+
+    // Capture info for lines about to expire
+    var expiring = {};
+    _livePathLines.forEach(function(lp) {
+      if (!lp.pinned && now - lp.addedAt > LINE_TOTAL_S)
+        expiring[lp.srcKey] = { hopCount: lp.hopCount, srcName: lp.srcName, pathHops: lp.pathHops, detailHtml: lp.detailHtml };
+    });
+
+    // Remove expired (skip pinned), cosine-fade active lines only
+    _livePathLines = _livePathLines.filter(function(lp) {
+      if (lp.pinned) return true;
+      var age = now - lp.addedAt;
+      if (age > LINE_TOTAL_S) { map.removeLayer(lp.polyline); return false; }
+      if (lp.srcKey !== _hoveredSrcKey) {  // don't overwrite hover highlight
+        var t = Math.max(0, (age - LINE_FULL_S) / LINE_FADE_S);
+        var o = t <= 0 ? 0.9 : Math.max(0, 0.9 * Math.cos(t * Math.PI / 2));
+        lp.polyline.setStyle({ opacity: o });
+      }
+      return true;
+    });
+
+    // Retire srcKeys whose last line just expired
+    Object.keys(expiring).forEach(function(srcKey) {
+      var stillLive = _livePathLines.some(function(lp) { return lp.srcKey === srcKey; });
+      if (!stillLive) _retiredGroups[srcKey] = { hopCount: expiring[srcKey].hopCount, srcName: expiring[srcKey].srcName, pathHops: expiring[srcKey].pathHops, detailHtml: expiring[srcKey].detailHtml, retiredAt: now };
+    });
+    Object.keys(_retiredGroups).forEach(function(k) {
+      if (now - _retiredGroups[k].retiredAt > LEGEND_EXTRA_S) delete _retiredGroups[k];
+    });
+
+    // Rebuild legend — Name · Hops · ×N (skip DOM rebuild when nothing changed)
+    var groups = {};
+    _livePathLines.forEach(function(lp) {
+      var age = lp.pinned ? 0 : now - lp.addedAt;
+      if (!groups[lp.srcKey]) groups[lp.srcKey] = { count: 0, srcName: lp.srcName, hopCount: lp.hopCount, pathHops: lp.pathHops, detailHtml: lp.detailHtml, minAge: Infinity };
+      groups[lp.srcKey].count++;
+      if (age < groups[lp.srcKey].minAge) {
+        groups[lp.srcKey].minAge     = age;
+        groups[lp.srcKey].srcName    = lp.srcName;
+        groups[lp.srcKey].hopCount   = lp.hopCount;
+        groups[lp.srcKey].pathHops   = lp.pathHops;
+        groups[lp.srcKey].detailHtml = lp.detailHtml;
+      }
+    });
+    Object.keys(_retiredGroups).forEach(function(srcKey) {
+      if (!groups[srcKey]) groups[srcKey] = { count: 0, srcName: _retiredGroups[srcKey].srcName, hopCount: _retiredGroups[srcKey].hopCount, pathHops: _retiredGroups[srcKey].pathHops, detailHtml: _retiredGroups[srcKey].detailHtml, minAge: LINE_TOTAL_S };
+    });
+
+    var pinnedKey = _pinnedLine ? _pinnedLine.srcKey : '';
+    var newSig = JSON.stringify(Object.keys(groups).sort().map(function(k) {
+      return [k, groups[k].srcName, groups[k].hopCount, groups[k].count, k === pinnedKey];
+    }));
+    var container = document.getElementById('legendLivePaths');
+    if (newSig === _lastLegendSig) return;
+    _lastLegendSig = newSig;
+    container.innerHTML = '';
+
+    Object.keys(groups).forEach(function(srcKey) {
+      var g = groups[srcKey];
+      var hops = g.hopCount || (g.pathHops ? g.pathHops.length : 1);
+      var hopLabel = hops + (hops === 1 ? 'Hop' : 'Hops');
+
+      var item = document.createElement('div');
+      item.className = 'legend-live-item' + (srcKey === pinnedKey ? ' llitem-active' : '');
+      item.setAttribute('data-srckey', srcKey);
+
+      // Source name chip
+      var chip = document.createElement('span');
+      chip.className = 'llchip';
+      var displayName = g.srcName || srcKey;
+      chip.textContent = displayName.length > 9 ? displayName.substring(0, 8) + '…' : displayName;
+      if (displayName.length > 9) chip.title = displayName;
+
+      // Hop count label
+      var hopEl = document.createElement('span');
+      hopEl.className = 'llcount';
+      hopEl.style.color = '#64748b';
+      hopEl.style.marginLeft = '5px';
+      hopEl.textContent = hopLabel;
+
+      item.appendChild(chip);
+      item.appendChild(hopEl);
+
+      // ×N hear count
+      if (g.count > 1) {
+        var countEl = document.createElement('span');
+        countEl.className = 'llcount';
+        countEl.textContent = '\xd7' + g.count;
+        item.appendChild(countEl);
+      }
+      container.appendChild(item);
+    });
+  }
+
+  function fetchLivePaths() {
+    if (!_livePathsOn) return;
+    if (!_allNodeLatLng || Object.keys(_allNodeLatLng).length < 2) return;
+    fetch('/api/packets?limit=80')
+      .then(function(r) { return r.json(); })
+      .then(function(events) {
+        var cutoff = Date.now() / 1000 - 30;
+        events.forEach(function(evt) {
+          if (evt.type !== 'rx') return;
+          if (!evt.path || evt.path.length === 0) return;
+          if (evt.ts < cutoff) return;
+          var id = evt.ts + '_' + evt.path.map(function(h) { return h.id; }).join('-');
+          if (_seenLiveIds.has(id)) return;
+          _seenLiveIds.add(id);
+
+          var coords = [];
+          evt.path.forEach(function(hop) {
+            var node = _resolveHop(hop.id);
+            if (node) coords.push([node.lat, node.lon]);
+          });
+          var home = _allNodeLatLng['__home__'];
+          if (home) coords.push([home.lat, home.lon]);
+          if (coords.length < 2) return;
+
+          var firstHop = evt.path[0];
+          var srcKey   = firstHop ? firstHop.id.substring(0, 4).toUpperCase() : '????';
+          var pathHops = evt.path.map(function(hop) {
+            var n = _resolveHop(hop.id);
+            return n ? (n.name || hop.id.substring(0, 4)) : hop.id.substring(0, 4);
+          });
+          var srcName  = pathHops[0] || srcKey;
+          var detailHtml = _buildDetailHtml(pathHops, evt.path.length, evt.pkt_type, evt.rssi, evt.snr);
+
+          var lp = { polyline: null, addedAt: Date.now() / 1000, srcKey: srcKey, hopCount: evt.path.length, srcName: srcName, pathHops: pathHops, detailHtml: detailHtml, pinned: false };
+
+          var line = L.polyline(coords, {
+            color: '#38bdf8', weight: 3, opacity: 0.9,
+            dashArray: '8 4', className: 'live-path-line'
+          }).addTo(map);
+          if (line.getElement) {
+            var el = line.getElement();
+            if (el && el.parentNode) el.parentNode.appendChild(el);
+          }
+
+          // Click on line → pin it and show detail panel; stop map click from firing
+          line.on('click', function(e) {
+            L.DomEvent.stopPropagation(e);
+            if (_pinnedLine && _pinnedLine !== lp) _unpinLine();
+            if (lp.pinned) {
+              _unpinLine();  // second click = unpin
+            } else {
+              lp.pinned = true;
+              _pinnedLine = lp;
+              line.setStyle({ weight: 4.5, color: '#7dd3fc', opacity: 1 });
+              _showLiveDetail(detailHtml);
+            }
+          });
+
+          lp.polyline = line;
+          if (_retiredGroups[srcKey]) delete _retiredGroups[srcKey];
+          _livePathLines.push(lp);
+        });
+        if (_seenLiveIds.size > 500) _seenLiveIds.clear();
+      })
+      .catch(function() {});
+  }
+
+  document.getElementById('livePathsBox').style.display = '';
+  setInterval(fetchLivePaths, 4000);
+  setInterval(tickLivePaths, 250);
+  fetchLivePaths();
+
+  // Mini connection status in header
+  (function(){function _mc(){fetch('/api/connection').then(function(r){return r.json();}).then(function(d){var dot=document.getElementById('miniConnDot'),txt=document.getElementById('miniConnText');if(!dot)return;dot.className='status-dot '+(d.connected?'online':'offline');txt.textContent=d.connected?'Connected':'Disconnected';}).catch(function(){var dot=document.getElementById('miniConnDot');if(dot)dot.className='status-dot offline';});}
+  _mc();setInterval(_mc,10000);})();
 </script>
+<script src="/static/nav.js?v={{ v }}"></script>
 </body>
 </html>

@@ -25,8 +25,10 @@ class RepeaterState:
     lat: float = 0.0
     lon: float = 0.0
     fw_version: str = ""
+    temperature_c: float = 0.0
     last_seen_epoch: float = 0.0
     last_poll_ok: Optional[bool] = None  # None = never polled, True = ok, False = timed out
+    clock_offset_s: Optional[float] = None  # seconds difference: repeater clock − system clock
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -82,13 +84,35 @@ class DataStore:
                 battery_voltage REAL,
                 rssi INTEGER,
                 snr REAL,
-                uptime_seconds INTEGER
+                uptime_seconds INTEGER,
+                temperature_c REAL
             )
         """)
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_telemetry_pubkey_ts
             ON telemetry_log (pubkey, timestamp)
         """)
+        # Migration: add new columns if missing
+        for _col, _def in [("temperature_c", "REAL"), ("noise_floor", "INTEGER")]:
+            try:
+                conn.execute(f"ALTER TABLE telemetry_log ADD COLUMN {_col} {_def}")
+            except Exception:
+                pass  # Column already exists
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS poll_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp REAL NOT NULL,
+                pubkey TEXT NOT NULL,
+                online INTEGER NOT NULL,
+                latency_ms INTEGER
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_poll_log_pubkey_ts
+            ON poll_log (pubkey, timestamp)
+        """)
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS activity_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,6 +179,23 @@ class DataStore:
             """)
         except Exception:
             pass
+        # Add first_seen to advert_nodes (set once on INSERT, never overwritten)
+        try:
+            conn.execute("ALTER TABLE advert_nodes ADD COLUMN first_seen REAL")
+        except Exception:
+            pass  # column already exists
+        # One-time GPS scale migration: fix advert_nodes that were stored with /1e7 instead of /1e6
+        # Detectable: NZ lat should be ~-34 to -47, lon ~166-178. Wrong values are ~-3.4 to -4.7, 16.6-17.8
+        try:
+            conn.execute("""
+                UPDATE advert_nodes
+                SET lat = lat * 10, lon = lon * 10
+                WHERE lat IS NOT NULL AND lon IS NOT NULL
+                  AND abs(lat) < 10 AND abs(lon) < 20
+                  AND abs(lat * 10) BETWEEN 10 AND 90
+            """)
+        except Exception:
+            pass
         conn.commit()
         conn.close()
 
@@ -202,9 +243,19 @@ class DataStore:
     def update_route(self, pubkey: str, hops: int, route_path: str):
         """Update hop count and route path without touching last_seen."""
         with self._lock:
-            if pubkey in self._repeaters:
-                self._repeaters[pubkey].hops = hops
-                self._repeaters[pubkey].route_path = route_path
+            pk = pubkey.lower()
+            # Case-insensitive lookup
+            key = next((k for k in self._repeaters if k.lower() == pk), None)
+            if key:
+                self._repeaters[key].hops = hops
+                self._repeaters[key].route_path = route_path
+
+    def clear_all_routes(self):
+        """Clear stored hops and route_path on every repeater."""
+        with self._lock:
+            for state in self._repeaters.values():
+                state.hops = -1
+                state.route_path = ""
 
     def get_route_by_prefix(self, pubkey_prefix: str) -> tuple:
         """Return (hops, route_path) for the first repeater whose pubkey starts with the given prefix.
@@ -231,8 +282,69 @@ class DataStore:
         with self._lock:
             if pubkey in self._repeaters:
                 self._repeaters[pubkey].last_poll_ok = False
+        self.log_poll(pubkey, online=False)
 
-    def update_repeater(self, pubkey: str, **kwargs):
+    def log_poll(self, pubkey: str, online: bool, latency_ms: int = None):
+        """Record a poll result (success/failure + latency) to poll_log."""
+        if not self._db_path:
+            return
+        try:
+            conn = sqlite3.connect(self._db_path)
+            conn.execute(
+                "INSERT INTO poll_log (timestamp, pubkey, online, latency_ms) VALUES (?, ?, ?, ?)",
+                (time.time(), pubkey, 1 if online else 0, latency_ms),
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[DataStore] poll_log write error: {e}")
+
+    def get_poll_history(self, pubkey: str, hours: int = 24) -> list:
+        """Return poll history for a repeater: [{ts, online, latency_ms}]."""
+        if not self._db_path:
+            return []
+        since = time.time() - (hours * 3600)
+        try:
+            conn = sqlite3.connect(self._db_path)
+            rows = conn.execute(
+                "SELECT timestamp, online, latency_ms FROM poll_log "
+                "WHERE pubkey = ? AND timestamp > ? ORDER BY timestamp",
+                (pubkey, since),
+            ).fetchall()
+            conn.close()
+            return [{"ts": r[0], "online": bool(r[1]), "latency_ms": r[2]} for r in rows]
+        except Exception as e:
+            print(f"[DataStore] poll_log read error: {e}")
+            return []
+
+    def log_cli(self, name: str, cmd: str, response: str = None):
+        """Write a CLI-level entry to the activity_log table."""
+        msg = f"CMD: {cmd}"
+        if response:
+            msg += f" → {response[:200]}"
+        with self._lock:
+            with sqlite3.connect(self._db_path) as conn:
+                conn.execute(
+                    "INSERT INTO activity_log (timestamp, level, logger_name, message) VALUES (?, ?, ?, ?)",
+                    (time.time(), "CLI", name, msg),
+                )
+
+    def log_alert(self, name: str, message: str):
+        """Write an ALERT-level entry directly to the activity_log table."""
+        if not self._db_path:
+            return
+        try:
+            conn = sqlite3.connect(self._db_path)
+            conn.execute(
+                "INSERT INTO activity_log (timestamp, level, logger_name, message) VALUES (?, ?, ?, ?)",
+                (time.time(), "ALERT", name, message),
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[DataStore] alert log error: {e}")
+
+    def update_repeater(self, pubkey: str, latency_ms: int = None, **kwargs):
         """Update a repeater's state with new data from a poll response."""
         with self._lock:
             if pubkey not in self._repeaters:
@@ -247,6 +359,7 @@ class DataStore:
 
         if self._db_path:
             self._log_to_db(pubkey)
+        self.log_poll(pubkey, online=True, latency_ms=latency_ms)
 
     def _log_to_db(self, pubkey: str):
         with self._lock:
@@ -257,20 +370,54 @@ class DataStore:
             row = (
                 time.time(), r.pubkey, r.name, r.battery_mv,
                 r.battery_voltage, r.rssi, r.snr, r.uptime_seconds,
+                r.temperature_c or None, r.noise_floor or None,
             )
 
         try:
             conn = sqlite3.connect(self._db_path)
             conn.execute(
                 "INSERT INTO telemetry_log "
-                "(timestamp, pubkey, name, battery_mv, battery_voltage, rssi, snr, uptime_seconds) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "(timestamp, pubkey, name, battery_mv, battery_voltage, rssi, snr, uptime_seconds, temperature_c, noise_floor) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 row,
             )
             conn.commit()
             conn.close()
         except Exception as e:
             print(f"[DataStore] DB write error: {e}")
+
+    def log_companion_battery(self, battery_mv: int):
+        """Log a companion battery reading to the telemetry_log table."""
+        if not self._db_path or not battery_mv:
+            return
+        try:
+            conn = sqlite3.connect(self._db_path)
+            conn.execute(
+                "INSERT INTO telemetry_log (timestamp, pubkey, name, battery_mv) VALUES (?, ?, ?, ?)",
+                (time.time(), "__companion__", "Companion", battery_mv),
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[DataStore] companion battery log error: {e}")
+
+    def get_companion_history(self, hours: int = 24) -> List[dict]:
+        """Return companion battery history over the last N hours."""
+        if not self._db_path:
+            return []
+        since = time.time() - (hours * 3600)
+        try:
+            conn = sqlite3.connect(self._db_path)
+            rows = conn.execute(
+                "SELECT timestamp, battery_mv FROM telemetry_log "
+                "WHERE pubkey = '__companion__' AND timestamp > ? ORDER BY timestamp",
+                (since,),
+            ).fetchall()
+            conn.close()
+            return [{"ts": row[0], "battery_mv": row[1]} for row in rows]
+        except Exception as e:
+            print(f"[DataStore] companion history error: {e}")
+            return []
 
     def get_all(self) -> List[dict]:
         """Return all repeater states as a JSON-serializable list."""
@@ -285,7 +432,7 @@ class DataStore:
         try:
             conn = sqlite3.connect(self._db_path)
             rows = conn.execute(
-                "SELECT timestamp, battery_mv, battery_voltage, rssi, snr, uptime_seconds "
+                "SELECT timestamp, battery_mv, battery_voltage, rssi, snr, uptime_seconds, temperature_c, noise_floor "
                 "FROM telemetry_log "
                 "WHERE pubkey = ? AND timestamp > ? "
                 "ORDER BY timestamp",
@@ -300,6 +447,8 @@ class DataStore:
                     "rssi": row[3],
                     "snr": row[4],
                     "uptime": row[5],
+                    "temperature_c": row[6],
+                    "noise_floor": row[7],
                 }
                 for row in rows
             ]
@@ -450,26 +599,64 @@ class DataStore:
             print(f"[DataStore] Message read error: {e}")
             return []
 
+    def count_messages(self, hours: int = 24) -> int:
+        """Return the number of messages received in the last N hours."""
+        if not self._db_path:
+            return 0
+        since = time.time() - (hours * 3600)
+        try:
+            conn = sqlite3.connect(self._db_path)
+            row = conn.execute("SELECT COUNT(*) FROM messages WHERE timestamp > ?", (since,)).fetchone()
+            conn.close()
+            return row[0] if row else 0
+        except Exception:
+            return 0
+
     def upsert_advert_node(self, pubkey: str, name: str, lat: float = None, lon: float = None):
         """Upsert a node discovered via advert packet."""
         if not self._db_path or not pubkey or not name:
             return
         try:
             conn = sqlite3.connect(self._db_path)
+            now = time.time()
             conn.execute(
-                """INSERT INTO advert_nodes (pubkey, name, lat, lon, last_seen)
-                   VALUES (?, ?, ?, ?, ?)
+                """INSERT INTO advert_nodes (pubkey, name, lat, lon, last_seen, first_seen)
+                   VALUES (?, ?, ?, ?, ?, ?)
                    ON CONFLICT(pubkey) DO UPDATE SET
                      name=excluded.name,
                      lat=COALESCE(excluded.lat, advert_nodes.lat),
                      lon=COALESCE(excluded.lon, advert_nodes.lon),
                      last_seen=excluded.last_seen""",
-                (pubkey, name, lat, lon, time.time())
+                (pubkey, name, lat, lon, now, now)
             )
             conn.commit()
             conn.close()
         except Exception as e:
             print(f"[DataStore] Advert node upsert error: {e}")
+
+    def clear_all_advert_nodes(self):
+        """Delete every advert node from the DB."""
+        if not self._db_path:
+            return
+        try:
+            conn = sqlite3.connect(self._db_path)
+            conn.execute("DELETE FROM advert_nodes")
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[DataStore] Advert nodes clear error: {e}")
+
+    def delete_advert_node(self, pubkey: str):
+        """Remove an advert node from the DB by pubkey prefix match."""
+        if not self._db_path:
+            return
+        try:
+            conn = sqlite3.connect(self._db_path)
+            conn.execute("DELETE FROM advert_nodes WHERE pubkey LIKE ?", (pubkey.lower() + '%',))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[DataStore] Advert node delete error: {e}")
 
     def get_advert_nodes(self) -> list:
         """Return all advert-discovered nodes."""
@@ -478,10 +665,10 @@ class DataStore:
         try:
             conn = sqlite3.connect(self._db_path)
             rows = conn.execute(
-                "SELECT pubkey, name, lat, lon, last_seen FROM advert_nodes ORDER BY last_seen DESC"
+                "SELECT pubkey, name, lat, lon, last_seen, first_seen FROM advert_nodes ORDER BY last_seen DESC"
             ).fetchall()
             conn.close()
-            return [{"pubkey": r[0], "name": r[1], "lat": r[2], "lon": r[3], "last_seen": r[4]} for r in rows]
+            return [{"pubkey": r[0], "name": r[1], "lat": r[2], "lon": r[3], "last_seen": r[4], "first_seen": r[5]} for r in rows]
         except Exception as e:
             print(f"[DataStore] Advert nodes read error: {e}")
             return []
