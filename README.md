@@ -1,6 +1,6 @@
 # MeshCore Dashboard
 
-A self-hosted web dashboard for monitoring MeshCore LoRa repeaters, contacts, and messages via a WiFi companion node.
+A self-hosted web dashboard for monitoring MeshCore LoRa repeaters, contacts, and messages via a WiFi companion node. this is a vibe coded Project
 
 > **Requirement:** A MeshCore WiFi companion node on your network with TCP enabled (default port **5000**).
 
@@ -30,9 +30,6 @@ The stats row is now a **3×2 grid on phones** instead of a cramped single row o
 
 ### Contacts Page
 New dedicated Contacts page with sortable columns showing all nodes seen by your companion.
-
-### Docker Hub
-Official Docker image published at `mattwh/meshcore-dashboard` — no building required. Update with a single `docker compose pull`.
 
 ### Navigation Consistency
 All 7 pages share the same navigation bar in the same order. The active page is highlighted automatically.
