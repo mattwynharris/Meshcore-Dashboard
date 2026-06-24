@@ -6,8 +6,13 @@ A self-hosted web dashboard for monitoring MeshCore LoRa repeaters, contacts, an
 
 ---
 
-<img width="1440" alt="Dashboard" src="https://github.com/user-attachments/assets/a0aacd82-5f93-4eec-a61f-1dbf62895e44" />
-<img width="1430" alt="Map" src="https://github.com/user-attachments/assets/5c57ad33-fe68-4ddb-b409-cd4b2faed2c9" />
+<img width="1437" height="742" alt="Screenshot 2026-06-24 at 22 45 59" src="https://github.com/user-attachments/assets/6e886642-cf5f-44fe-b2c8-77c974fcd126" />
+<img width="1436" height="753" alt="Screenshot 2026-06-24 at 22 47 24" src="https://github.com/user-attachments/assets/d6bb3b12-9505-4d64-b53b-b48ae883c27b" />
+<img width="1430" height="756" alt="Screenshot 2026-06-24 at 22 47 37" src="https://github.com/user-attachments/assets/c3dda521-28f1-4656-be25-f49565a4acc2" />
+<img width="1440" height="900" alt="Screenshot 2026-06-24 at 22 47 54" src="https://github.com/user-attachments/assets/92425f0a-bee0-4533-99c5-cbf4b10c26fe" />
+
+
+
 
 ---
 
